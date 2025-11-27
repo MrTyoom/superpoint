@@ -1,9 +1,7 @@
 .PHONY: format lint check fix help
 
 # Default variables
-PYTHON_FILES := .
-RUFF_CONFIG := ruff.toml
-ISORT_CONFIG := isort.toml
+PYTHON_FILES := src
 
 help:
 	@echo "Available commands:"
@@ -37,9 +35,6 @@ fix:
 	@echo "Fixing imports with isort..."
 	isort $(PYTHON_FILES)
 
-
-all: format lint
-
 ruff-format:
 	ruff format $(PYTHON_FILES)
 
@@ -62,3 +57,20 @@ format-file:
 lint-file:
 	ruff check $(file)
 	isort --check-only --diff $(file)
+
+## testing
+test:
+	pytest tests/test_prepare_synthetic_dataset.py
+
+## remove python file artifacts
+clean-pyc:
+	find . -name '__pycache__' -exec rm -fr {} +
+	find . -name '*.egg-info' -exec rm -fr {} +
+
+## remove all artifacts
+clean: clean-pyc
+	rm -fr .ruff_cache
+	rm -fr .pytest_cache
+
+## all checks
+all: format lint test

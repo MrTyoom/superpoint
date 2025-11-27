@@ -1,0 +1,9 @@
+# python
+*.pyc
+*.pyo
+__pycache__
+.ruff_cache
+
+.vscode/
+data/
+tmp/
