@@ -8,8 +8,6 @@ import tqdm
 from joblib import Parallel, delayed
 from omegaconf import OmegaConf
 
-# import cv2
-
 rootutils.setup_root(__file__, indicator="src", pythonpath=True)
 
 from src.utils import make_dir
@@ -918,7 +916,7 @@ def main(cfg):
         out_dir = make_dir(data_dir / primitive_name)
 
         Parallel(
-            n_jobs=1,
+            n_jobs=-1,
             backend="multiprocessing",
             prefer="processes",
             verbose=0,
