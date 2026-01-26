@@ -6,11 +6,16 @@ from omegaconf import OmegaConf
 
 rootutils.setup_root(__file__, indicator="src", pythonpath=True)
 
-from src.prepare_synthetic_dataset import (draw_checkerboard, draw_cube,
-                                           draw_ellipses, draw_lines,
-                                           draw_multiple_polygons,
-                                           draw_polygon, draw_star,
-                                           draw_stripes, generate_data)
+from src.prepare_synthetic_dataset import (
+    draw_checkerboard,
+    draw_cube,
+    draw_lines,
+    draw_multiple_polygons,
+    draw_polygon,
+    draw_star,
+    draw_stripes,
+    generate_data,
+)
 from src.utils import make_dir
 
 
