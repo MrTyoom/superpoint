@@ -2,12 +2,16 @@ import random
 
 
 import torch
-
+import sys
 import numpy as np
 import torch.utils.data as data
 
 from imageio import imread
 from pathlib import Path
+from omegaconf import OmegaConf
+
+sys.path.append(str(Path(__file__).parent.parent))
+
 from settings import DATA_PATH
 from utils.homographies import sample_homography_np as sample_homography
 from utils.utils import (compute_valid_mask, inv_warp_image, warp_points,
@@ -28,13 +32,14 @@ class SyntheticDataset(data.Dataset):
         warp_input=False,
         **config
     ):
+        self.seed = seed
         
         device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         torch.set_default_dtype(torch.float32)
         torch.set_default_device(device)
-        np.random.seed(seed)
-        random.seed(seed)
-        
+        np.random.seed(self.seed)
+        random.seed(self.seed)
+
         self.config = config
         
         self.transform = transform
@@ -45,6 +50,7 @@ class SyntheticDataset(data.Dataset):
         self.ImgAugTransform = ImgAugTransform
         self.customizedTransform = customizedTransform
         
+    
         ######
         self.enable_photo_train = self.config["aug"]["photometric"]["enable"]
         self.enable_homo_train = self.config["aug"]["homographic"]["enable"]
@@ -52,6 +58,7 @@ class SyntheticDataset(data.Dataset):
         self.enable_photo_val = False
         ######
         
+        self.task = task
         self.action = 'training' if task == 'train' else 'validation'
         self.data = self.split_data()[0 if self.action == 'train' else 1]
         
@@ -85,14 +92,13 @@ class SyntheticDataset(data.Dataset):
         return labels_res
     
     def split_data(self):
-        key = 'prepare_synthetic_dataset'
-        random_state = np.random.RandomState(self.config[key]['seed'])
-        
+        random_state = np.random.RandomState(self.seed)
+
         base_dir = Path(DATA_PATH , 'data', 'synthetic_dataset')
-        all_primitives = list(self.config[key]['primitives'].keys())
-        
+        all_primitives = list(self.config['primitives'].keys())
+
         all_files = []
-        
+
         for primitive in all_primitives:
             for el in range(20):
                 dir_path = base_dir / Path(primitive, f"{el:02d}")
@@ -102,16 +108,17 @@ class SyntheticDataset(data.Dataset):
                     all_files.append((img_path, pts_path))
                     
         total_files = len(all_files)
-        train_count = int(self.config[key]['train_size'] * total_files)
-        
-        all_indices = set(range(total_files))
-        train_ind = set(random_state.sample(range(total_files), train_count))
-        val_ind = all_indices - train_ind
-        
-        
+        train_count = int(self.config['train_size'] * total_files)
+
+        all_indices = np.arange(total_files)  
+        train_ind = random_state.choice(all_indices, size=train_count, replace=False)
+        train_ind = set(train_ind)
+        val_ind = set(all_indices) - train_ind
+
+
         train_data = [all_files[i] for i in train_ind]
         val_data = [all_files[i] for i in val_ind]
-        
+
         return train_data, val_data
     
     def __getitem__(self, index):
@@ -194,3 +201,18 @@ class SyntheticDataset(data.Dataset):
         
 
         return sample
+    
+    def __len__(self):
+        return len(self.data)
+    
+
+  
+if __name__ == "__main__":
+    params_path = Path(__file__).parent.parent / 'params.yaml'
+    cfg = OmegaConf.load(str(params_path))
+    
+    training_cfg = cfg['prepare_synthetic_dataset']
+    dataset = SyntheticDataset(**training_cfg)
+    
+    train_data, val_data = dataset.split_data()
+    print(train_data[0], val_data[0])

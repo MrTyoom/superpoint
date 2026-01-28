@@ -52,7 +52,7 @@ def load_config(config_path):
     return OmegaConf.create(config)
 
 
-def dataLoader(config, dataset="syn", warp_input=False, train=True, val=True):
+def dataLoader(config, dataset="SyntheticDataset", warp_input=False, train=True, val=True):
     if torch.cuda.is_available():
         generator = torch.Generator(device="cuda")
     else:

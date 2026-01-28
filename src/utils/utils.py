@@ -175,3 +175,19 @@ def getWriterPath(task="train", exper_name="", date=True):
     if date:
         str_date_time = datetime.datetime.now().strftime("%Y-%m-%d_%H:%M:%S")
     return prefix + task + "/" + exper_name + str_date_time
+
+
+def homography_scaling_torch(homography, H, W):
+    trans = torch.tensor([[2./W, 0., -1], [0., 2./H, -1], [0., 0., 1.]])
+    homography = (trans.inverse() @ homography @ trans)
+    return homography
+
+def filter_points(points, shape, return_mask=False):
+    ### check!
+    points = points.float()
+    shape = shape.float()
+    mask = (points >= 0) * (points <= shape-1)
+    mask = (torch.prod(mask, dim=-1) == 1)
+    if return_mask:
+        return points[mask], mask
+    return points [mask]
