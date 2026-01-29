@@ -16,7 +16,7 @@ from src.prepare_synthetic_dataset import (
     draw_stripes,
     generate_data,
 )
-from src.utils import make_dir
+from src.utils.utils import make_dir
 
 
 @pytest.fixture(scope="package")
