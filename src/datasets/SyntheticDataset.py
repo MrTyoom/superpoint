@@ -11,6 +11,7 @@ from omegaconf import OmegaConf
 
 sys.path.append(str(Path(__file__).parent.parent))
 
+
 from settings import DATA_PATH
 from utils.homographies import sample_homography_np as sample_homography
 from utils.utils import (compute_valid_mask, inv_warp_image, warp_points,
@@ -189,7 +190,7 @@ class SyntheticDataset(data.Dataset):
                 img_tensor = img_tensor.unsqueeze(0)
             img_tensor = img_tensor.to(device)
             
-            warped_img_tensor = torch.from_numpy(warped_img).float()
+            warped_img_tensor = warped_img.clone()
             if warped_img_tensor.dim() == 2:
                 warped_img_tensor = warped_img_tensor.unsqueeze(0)
             elif warped_img_tensor.dim() == 3 and warped_img_tensor.shape[2] == 1:
@@ -201,8 +202,10 @@ class SyntheticDataset(data.Dataset):
             labels_2D,
             valid_mask,
             warped_img_tensor,
-            warped_labels_res
+            warped_labels_res,
+            homography
         )
+        # [1, 240, 320]
         
         return sample
     

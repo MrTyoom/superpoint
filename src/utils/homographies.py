@@ -6,6 +6,7 @@
 
 from math import pi
 
+import torch
 import cv2
 import numpy as np
 from numpy.random import uniform
@@ -144,3 +145,10 @@ def sample_homography_np(
         np.float32(pts2 + shift),  # input patch
     )
     return homography
+
+def scale_homography_torch(H, shape, shift=(-1,-1), dtype=torch.float32):
+    height, width = shape[0], shape[1]
+    trans = torch.tensor([[2./width, 0., shift[0]], [0., 2./height, shift[1]], [0., 0., 1.]], dtype=dtype)
+    trans = trans.to('cuda:0')
+    H_tf = torch.inverse(trans) @ H @ trans
+    return H_tf

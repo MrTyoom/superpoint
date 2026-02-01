@@ -1,845 +1,405 @@
-"""This is the frontend interface for training
-base class: inherited by other Train_model_*.py
-
-Author: You-Yi Jau, Rui Zhu
-Date: 2019/12/12
-"""
-
-import logging
-import numpy as np
 import torch
+import logging
+import time
 
+import numpy as np
 import torch.nn as nn
+import torch.nn.functional as F
 
+from typing import Dict
+from utils.utils import labels2Dto3D_flattened, flattenDetection, precisionRecall_torch
+from models.SuperPointNet_gauss2 import SuperPointNet_gauss2
+from utils.loader import dataLoader
+
+from torch.utils.tensorboard import SummaryWriter
 from pathlib import Path
 from tqdm import tqdm
-
-from utils.loader import dataLoader, modelLoader, pretrainedLoader
-from utils.utils import (dict_update, flattenDetection, labels2Dto3D,
-                         labels2Dto3D_flattened, precisionRecall_torch,
-                         save_checkpoint, saveImg, descriptor_loss, box_nms,
-                         getPtsFromHeatmap)
-
 from utils.loss_functions.sparse_loss import batch_descriptor_loss_sparse
-from utils.losses import extract_patches
+from utils.utils import descriptor_loss
+from omegaconf import OmegaConf
 
 
-def thd_img(img, thd=0.015):
-    """
-    thresholding the image.
-    :param img:
-    :param thd:
-    :return:
-    """
-    img[img < thd] = 0
-    img[img >= thd] = 1
-    return img
-
-
-def toNumpy(tensor):
-    return tensor.detach().cpu().numpy()
-
-
-def img_overlap(img_r, img_g, img_gray):  # img_b repeat
-    img = np.concatenate((img_gray, img_gray, img_gray), axis=0)
-    img[0, :, :] += img_r[0, :, :]
-    img[1, :, :] += img_g[0, :, :]
-    img[img > 1] = 1
-    img[img < 0] = 0
-    return img
-
-
-class Train_model_frontend(object):
-    """
-    # This is the base class for training classes. Wrap pytorch net to help training process.
-
-    """
-
-    default_config = {
-        "train_iter": 170000,
-        "save_interval": 2000,
-        "tensorboard_interval": 200,
-        "model": {"subpixel": {"enable": False}},
-    }
-
-    def __init__(self, config, save_path=Path("."), device="cpu", verbose=False):
-        """
-        ## default dimension:
-            heatmap: torch (batch_size, H, W, 1)
-            dense_desc: torch (batch_size, H, W, 256)
-            pts: [batch_size, np (N, 3)]
-            desc: [batch_size, np(256, N)]
-
-        :param config:
-            dense_loss, sparse_loss (default)
-
-        :param save_path:
-        :param device:
-        :param verbose:
-        """
-        # config
-        print("Load Train_model_frontend!!")
-        self.config = self.default_config
-        self.config = dict_update(self.config, config)
-        print("check config!!", self.config)
-
-        # init parameters
+class Train_model_frontend:
+    def __init__(
+        self, 
+        model: nn.Module,
+        train_loader,
+        val_loader,
+        config: dict,
+        device: str = "cuda" if torch.cuda.is_available() else "cpu",
+        learning_rate: float = 1e-3,
+        save_dir: str = 'checkpoints',
+        log_dir: str = 'logs',
+        max_epochs: int = 200,
+        early_stopping_patience: int = 10,
+        ):
+        
+        self.model = model.to(device)
+        self.train_loader = train_loader
+        self.val_loader = val_loader
         self.device = device
-        self.save_path = save_path
-        self._train = True
-        self._eval = True
-        self.cell_size = 8
-        self.subpixel = False
-        self.loss = 0
+        self.config = config
+        
+        self.optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
+        self.critetion = nn.CrossEntropyLoss()
+        
+        self.lambda_det = config['model'].get('lambda_det', 1.0)
+        self.lambda_desc = config['model'].get('lambda_desc', 1.0)
+        self.detection_threshold = config['model'].get('detection_threshold', 0.015)
+        
+        self.save_dir = Path(save_dir)
+        self.save_dir.mkdir(parents=True, exist_ok=True)
+        
+        self.log_dir = Path(log_dir)
+        self.writer = SummaryWriter(log_dir)
 
-        self.max_iter = config["train_iter"]
-
-        if self.config["model"]["dense_loss"]["enable"]:
-            ## original superpoint paper uses dense loss
-            print("use dense_loss!")
-
-            self.desc_params = self.config["model"]["dense_loss"]["params"]
-            self.descriptor_loss = descriptor_loss
-            self.desc_loss_type = "dense"
-        elif self.config["model"]["sparse_loss"]["enable"]:
-            ## our sparse loss has similar performace, more efficient
-            print("use sparse_loss!")
-            self.desc_params = self.config["model"]["sparse_loss"]["params"]
-
-            self.descriptor_loss = batch_descriptor_loss_sparse
-            self.desc_loss_type = "sparse"
-
-        if self.config["model"]["subpixel"]["enable"]:
-            ## deprecated: only for testing subpixel prediction
-            self.subpixel = True
-
-            def get_func(path, name):
-                logging.info("=> from %s import %s", path, name)
-                mod = __import__("{}".format(path), fromlist=[""])
-                return getattr(mod, name)
-
-            self.subpixel_loss_func = get_func("utils.losses", self.config["model"]["subpixel"]["loss_func"])
-
-        # load model
-        # self.net = self.loadModel(*config['model'])
-        self.printImportantConfig()
-
-        pass
-
-    def printImportantConfig(self):
-        """
-        # print important configs
-        :return:
-        """
-        print("=" * 10, " check!!! ", "=" * 10)
-
-        print("learning_rate: ", self.config["model"]["learning_rate"])
-        print("lambda_loss: ", self.config["model"]["lambda_loss"])
-        print("detection_threshold: ", self.config["model"]["detection_threshold"])
-        print("batch_size: ", self.config["model"]["batch_size"])
-
-        print("=" * 10, " descriptor: ", self.desc_loss_type, "=" * 10)
-        for item in list(self.desc_params):
-            print(item, ": ", self.desc_params[item])
-
-        print("=" * 32)
-        pass
-
-    def dataParallel(self):
-        """
-        put network and optimizer to multiple gpus
-        :return:
-        """
-        print("=== Let's use", torch.cuda.device_count(), "GPUs!")
-        self.net = nn.DataParallel(self.net)
-        self.optimizer = self.adamOptim(self.net, lr=self.config["model"]["learning_rate"])
-        pass
-
-    def adamOptim(self, net, lr):
-        """
-        initiate adam optimizer
-        :param net: network structure
-        :param lr: learning rate
-        :return:
-        """
-        print("adam optimizer")
-        import torch.optim as optim
-
-        optimizer = optim.Adam(net.parameters(), lr=lr, betas=(0.9, 0.999))
-        return optimizer
-
-    def loadModel(self):
-        """
-        load model from name and params
-        init or load optimizer
-        :return:
-        """
-        model = self.config["model"]["name"]
-        params = self.config["model"]["params"]
-        print("model: ", model)
-        net = modelLoader(model=model, **params).to(self.device)
-        logging.info("=> setting adam solver")
-        optimizer = self.adamOptim(net, lr=self.config["model"]["learning_rate"])
-
-        n_iter = 0
-        ## new model or load pretrained
-        if self.config["retrain"]:
-            logging.info("New model")
-            pass
-        else:
-            path = self.config["pretrained"]
-            mode = "" if path[-4:] == ".pth" else "full"  # the suffix is '.pth' or 'tar.gz'
-            logging.info("load pretrained model from: %s", path)
-            net, optimizer, n_iter = pretrainedLoader(net, optimizer, n_iter, path, mode=mode, full_path=True)
-            logging.info("successfully load pretrained model from: %s", path)
-
-        def setIter(n_iter):
-            if self.config["reset_iter"]:
-                logging.info("reset iterations to 0")
-                n_iter = 0
-            return n_iter
-
-        self.net = net
-        self.optimizer = optimizer
-        self.n_iter = setIter(n_iter)
-        pass
-
-    @property
-    def writer(self):
-        """
-        # writer for tensorboard
-        :return:
-        """
-        # print("get writer")
-        return self._writer
-
-    @writer.setter
-    def writer(self, writer):
-        print("set writer")
-        self._writer = writer
-
-    @property
-    def train_loader(self):
-        """
-        loader for dataset, set from outside
-        :return:
-        """
-        print("get dataloader")
-        return self._train_loader
-
-    @train_loader.setter
-    def train_loader(self, loader):
-        print("set train loader")
-        self._train_loader = loader
-
-    @property
-    def val_loader(self):
-        print("get dataloader")
-        return self._val_loader
-
-    @val_loader.setter
-    def val_loader(self, loader):
-        print("set train loader")
-        self._val_loader = loader
-
-    def train(self, **options):
-        """
-        # outer loop for training
-        # control training and validation pace
-        # stop when reaching max iterations
-        :param options:
-        :return:
-        """
-        # training info
-        logging.info("n_iter: %d", self.n_iter)
-        logging.info("max_iter: %d", self.max_iter)
-        running_losses = []
-        epoch = 0
-        # Train one epoch
-        while self.n_iter < self.max_iter:
-            print("epoch: ", epoch)
-            epoch += 1
-            for i, sample_train in tqdm(enumerate(self.train_loader), total=len(self.train_loader), leave=False):
-                # train one sample
-                loss_out = self.train_val_sample(sample_train, self.n_iter, True)
-                self.n_iter += 1
-                running_losses.append(loss_out)
-                # run validation
-                if self._eval and self.n_iter % self.config["validation_interval"] == 0:
-                    logging.info("====== Validating...")
-                    for j, sample_val in enumerate(self.val_loader):
-                        self.train_val_sample(sample_val, self.n_iter + j, False)
-                        if j > self.config.get("validation_size", 3):
-                            break
-                # save model
-                if self.n_iter % self.config["save_interval"] == 0:
-                    logging.info(
-                        "save model: every %d interval, current iteration: %d",
-                        self.config["save_interval"],
-                        self.n_iter,
-                    )
-                    self.saveModel()
-                # ending condition
-                if self.n_iter > self.max_iter:
-                    # end training
-                    logging.info("End training: %d", self.n_iter)
-                    break
-
-        pass
-
-    def getLabels(self, labels_2D, cell_size, device="cpu"):
-        """
-        # transform 2D labels to 3D shape for training
-        :param labels_2D:
-        :param cell_size:
-        :param device:
-        :return:
-        """
-        labels3D_flattened = labels2Dto3D_flattened(labels_2D.to(device), cell_size=cell_size)
-        labels3D_in_loss = labels3D_flattened
-        return labels3D_in_loss
-
-    def getMasks(self, mask_2D, cell_size, device="cpu"):
-        """
-        # 2D mask is constructed into 3D (Hc, Wc) space for training
-        :param mask_2D:
-            tensor [batch, 1, H, W]
-        :param cell_size:
-            8 (default)
-        :param device:
-        :return:
-            flattened 3D mask for training
-        """
-        mask_3D = labels2Dto3D(mask_2D.to(device), cell_size=cell_size, add_dustbin=False).float()
-        mask_3D_flattened = torch.prod(mask_3D, 1)
-        return mask_3D_flattened
-
-    def get_loss(self, semi, labels3D_in_loss, mask_3D_flattened, device="cpu"):
-        """
-        ## deprecated: loss function
-        :param semi:
-        :param labels3D_in_loss:
-        :param mask_3D_flattened:
-        :param device:
-        :return:
-        """
-        loss_func = nn.CrossEntropyLoss(reduce=False).to(device)
-        # if self.config['data']['gaussian_label']['enable']:
-        #     loss = loss_func_BCE(nn.functional.softmax(semi, dim=1), labels3D_in_loss)
-        #     loss = (loss.sum(dim=1) * mask_3D_flattened).sum()
-        # else:
-        loss = loss_func(semi, labels3D_in_loss)
-        loss = (loss * mask_3D_flattened).sum()
-        loss = loss / (mask_3D_flattened.sum() + 1e-10)
-        return loss
-
-    def train_val_sample(self, sample, n_iter=0, train=False):
-        """
-        # deprecated: default train_val_sample
-        :param sample:
-        :param n_iter:
-        :param train:
-        :return:
-        """
-        task = "train" if train else "val"
-        tb_interval = self.config["tensorboard_interval"]
-
-        losses = {}
-        ## get the inputs
-        # logging.info('get input img and label')
-        img, labels_2D, mask_2D = (
-            sample["image"],
-            sample["labels_2D"],
-            sample["valid_mask"],
+        self.max_epochs = max_epochs
+        self.early_stopping_patience = early_stopping_patience
+        
+        self.current_epoch = 0
+        self.best_val_loss = float('inf')
+        self.patience_counter = 0
+        
+        # Инициализация логгера
+        self.setup_logging()
+        
+    def setup_logging(self):
+        """Настройка логирования"""
+        logging.basicConfig(
+            level=logging.INFO,
+            format='%(asctime)s - %(levelname)s - %(message)s',
+            handlers=[
+                logging.FileHandler(self.save_dir / 'training.log'),
+                logging.StreamHandler()
+            ]
         )
-        # img, labels = img.to(self.device), labels_2D.to(self.device)
-
-        # variables
-        batch_size, _, _ = img.shape[0], img.shape[2], img.shape[3]
-        self.batch_size = batch_size
-        # print("batch_size: ", batch_size)
-        # Hc = H // self.cell_size
-        # Wc = W // self.cell_size
-
-        # warped images
-        # img_warp, labels_warp_2D, mask_warp_2D = sample['warped_img'].to(self.device), \
-        #     sample['warped_labels'].to(self.device), \
-        #     sample['warped_valid_mask'].to(self.device)
-        img_warp, labels_warp_2D, mask_warp_2D = (
-            sample["warped_img"],
-            sample["warped_labels"],
-            sample["warped_valid_mask"],
-        )
-
-        # homographies
-        # mat_H, mat_H_inv = \
-        # sample['homographies'].to(self.device), sample['inv_homographies'].to(self.device)
-        mat_H, _ = sample["homographies"], sample["inv_homographies"]
-
-        # zero the parameter gradients
-        self.optimizer.zero_grad()
-
-        # forward + backward + optimize
-        if train:
-            # print("img: ", img.shape, ", img_warp: ", img_warp.shape)
-            outs, outs_warp = (
-                self.net(img.to(self.device)),
-                self.net(img_warp.to(self.device), subpixel=self.subpixel),
-            )
-            semi, coarse_desc = outs[0], outs[1]
-            semi_warp, coarse_desc_warp = outs_warp[0], outs_warp[1]
-        else:
-            with torch.no_grad():
-                outs, outs_warp = (
-                    self.net(img.to(self.device)),
-                    self.net(img_warp.to(self.device), subpixel=self.subpixel),
-                )
-                semi, coarse_desc = outs[0], outs[1]
-                semi_warp, coarse_desc_warp = outs_warp[0], outs_warp[1]
-                pass
-
-        # detector loss
-        ## get labels, masks, loss for detection
-        labels3D_in_loss = self.getLabels(labels_2D, self.cell_size, device=self.device)
-        mask_3D_flattened = self.getMasks(mask_2D, self.cell_size, device=self.device)
-        loss_det = self.get_loss(semi, labels3D_in_loss, mask_3D_flattened, device=self.device)
-
-        ## warping
-        labels3D_in_loss = self.getLabels(labels_warp_2D, self.cell_size, device=self.device)
-        mask_3D_flattened = self.getMasks(mask_warp_2D, self.cell_size, device=self.device)
-        loss_det_warp = self.get_loss(semi_warp, labels3D_in_loss, mask_3D_flattened, device=self.device)
-
-        mask_desc = mask_3D_flattened.unsqueeze(1)
-
-        # print("mask_desc: ", mask_desc.shape)
-        # print("mask_warp_2D: ", mask_warp_2D.shape)
-
-        # descriptor loss
-
-        # if self.desc_loss_type == 'dense':
-        loss_desc, mask, positive_dist, negative_dist = self.descriptor_loss(
-            coarse_desc,
-            coarse_desc_warp,
-            mat_H,
-            mask_valid=mask_desc,
-            device=self.device,
-            **self.desc_params,
-        )
-
-        loss = loss_det + loss_det_warp + self.config["model"]["lambda_loss"] * loss_desc
-
-        if self.subpixel:
-            # coarse to dense descriptor
-            # work on warped level
-            # dense_desc = interpolate_to_dense(coarse_desc_warp, cell_size=self.cell_size) # tensor [batch, 256, H, W]
-
-            # dense_map = flattenDetection(semi_warp)  # tensor [batch, 1, H, W]
-
-            # concat image and dense_desc
-
-            # concat_features = torch.cat((img_warp.to(self.device), dense_map), dim=1)  # tensor [batch, n, H, W]
-
-            # prediction
-            # pred_heatmap = self.subpixNet(concat_features.to(self.device)) # tensor [batch, 1, H, W]
-            pred_heatmap = outs_warp[2]  # tensor [batch, 1, H, W]
-            # print("pred_heatmap: ",  pred_heatmap.shape)
-            # add histogram here
-            # tensor [batch, channels, H, W]
-            # loss
-            labels_warped_res = sample["warped_res"]
-            # writer.add_histogram(task + '-' + 'warped_res',
-            #     labels_warped_res[0,...].clone().cpu().data.numpy().transpose(0,1).transpose(1,2).view(-1, 2),
-            #     n_iter)
-
-            # from utils.losses import subpixel_loss
-            subpix_loss = self.subpixel_loss_func(
-                labels_warp_2D.to(self.device),
-                labels_warped_res.to(self.device),
-                pred_heatmap.to(self.device),
-                patch_size=11,
-            )
-            # print("subpix_loss: ", subpix_loss)
-            # loss += subpix_loss
-            # loss = subpix_loss
-
-            # extract the patches from labels
-            label_idx = labels_2D[...].nonzero()
-
-            patch_size = 32
-            patches = extract_patches(
-                label_idx.to(self.device),
-                img_warp.to(self.device),
-                patch_size=patch_size,
-            )  # tensor [N, patch_size, patch_size]
-            # patches = extract_patches(label_idx.to(device), labels_2D.to(device), patch_size=15) # tensor [N, patch_size, patch_size]
-            print("patches: ", patches.shape)
-
-            def label_to_points(labels_res, points):
-                labels_res = labels_res.transpose(1, 2).transpose(2, 3).unsqueeze(1)
-                points_res = labels_res[points[:, 0], points[:, 1], points[:, 2], points[:, 3], :]  # tensor [N, 2]
-                return points_res
-
-            points_res = label_to_points(labels_warped_res, label_idx)
-
-            num_patches_max = 500
-            # feed into the network
-            pred_res = self.subnet(patches[:num_patches_max, ...].to(self.device))  # tensor [1, N, 2]
-
-            # loss function
-            def get_loss(points_res, pred_res):
-                loss = points_res - pred_res
-                loss = torch.norm(loss, p=2, dim=-1).mean()
-                return loss
-
-            loss = get_loss(points_res[:num_patches_max, ...].to(self.device), pred_res)
-
-            losses.update({"subpix_loss": subpix_loss})
-
-        self.loss = loss
-
-        losses.update(
-            {
-                "loss": loss,
-                "loss_det": loss_det,
-                "loss_det_warp": loss_det_warp,
-                "positive_dist": positive_dist,
-                "negative_dist": negative_dist,
-            }
-        )
-        # print("losses: ", losses)
-
-        if train:
-            loss.backward()
-            self.optimizer.step()
-
-        self.addLosses2tensorboard(losses, task)
-        if n_iter % tb_interval == 0 or task == "val":
-            logging.info("current iteration: %d, tensorboard_interval: %d", n_iter, tb_interval)
-            self.addImg2tensorboard(
-                img,
-                labels_2D,
-                semi,
-                img_warp,
-                labels_warp_2D,
-                mask_warp_2D,
-                semi_warp,
-                mask_3D_flattened=mask_3D_flattened,
-                task=task,
-            )
-
-            if self.subpixel:
-                # print("only update subpixel_loss")
-
-                self.add_single_image_to_tb(task, pred_heatmap, n_iter, name="subpixel_heatmap")
-
-            self.printLosses(losses, task)
-
-            # if n_iter % tb_interval == 0 or task == 'val':
-            # print ("add nms")
-            self.add2tensorboard_nms(img, labels_2D, semi, task=task, batch_size=batch_size)
-
-        return loss.item()
-
-    def saveModel(self):
-        """
-        # save checkpoint for resuming training
-        :return:
-        """
-        model_state_dict = self.net.module.state_dict()
-        save_checkpoint(
-            self.save_path,
-            {
-                "n_iter": self.n_iter + 1,
-                "model_state_dict": model_state_dict,
-                "optimizer_state_dict": self.optimizer.state_dict(),
-                "loss": self.loss,
-            },
-            self.n_iter,
-        )
-        pass
-
-    def add_single_image_to_tb(self, task, img_tensor, n_iter, name="img"):
-        """
-        # add image to tensorboard for visualization
-        :param task:
-        :param img_tensor:
-        :param n_iter:
-        :param name:
-        :return:
-        """
-        if img_tensor.dim() == 4:
-            for i in range(min(img_tensor.shape[0], 5)):
-                self.writer.add_image(task + "-" + name + "/%d" % i, img_tensor[i, :, :, :], n_iter)
-        else:
-            self.writer.add_image(task + "-" + name, img_tensor[:, :, :], n_iter)
-
-    # tensorboard
-    def addImg2tensorboard(
-        self,
-        img,
-        labels_2D,
-        semi,
-        img_warp=None,
-        labels_warp_2D=None,
-        mask_warp_2D=None,
-        semi_warp=None,
-        mask_3D_flattened=None,
-        task="training",
-    ):
-        """
-        # deprecated: add images to tensorboard
-        :param img:
-        :param labels_2D:
-        :param semi:
-        :param img_warp:
-        :param labels_warp_2D:
-        :param mask_warp_2D:
-        :param semi_warp:
-        :param mask_3D_flattened:
-        :param task:
-        :return:
-        """
-        # print("add images to tensorboard")
-
-        n_iter = self.n_iter
-        semi_flat = flattenDetection(semi[0, :, :, :])
-        semi_warp_flat = flattenDetection(semi_warp[0, :, :, :])
-
-        thd = self.config["model"]["detection_threshold"]
-        semi_thd = thd_img(semi_flat, thd=thd)
-        semi_warp_thd = thd_img(semi_warp_flat, thd=thd)
-
-        result_overlap = img_overlap(toNumpy(labels_2D[0, :, :, :]), toNumpy(semi_thd), toNumpy(img[0, :, :, :]))
-
-        self.writer.add_image(task + "-detector_output_thd_overlay", result_overlap, n_iter)
-        saveImg(result_overlap.transpose([1, 2, 0])[..., [2, 1, 0]] * 255, "test_0.png")  # rgb to bgr * 255
-
-        result_overlap = img_overlap(
-            toNumpy(labels_warp_2D[0, :, :, :]),
-            toNumpy(semi_warp_thd),
-            toNumpy(img_warp[0, :, :, :]),
-        )
-        self.writer.add_image(task + "-warp_detector_output_thd_overlay", result_overlap, n_iter)
-        saveImg(result_overlap.transpose([1, 2, 0])[..., [2, 1, 0]] * 255, "test_1.png")  # rgb to bgr * 255
-
-        mask_overlap = img_overlap(
-            toNumpy(1 - mask_warp_2D[0, :, :, :]) / 2,
-            np.zeros_like(toNumpy(img_warp[0, :, :, :])),
-            toNumpy(img_warp[0, :, :, :]),
-        )
-
-        # writer.add_image(task + '_mask_valid_first_layer', mask_warp[0, :, :, :], n_iter)
-        # writer.add_image(task + '_mask_valid_last_layer', mask_warp[-1, :, :, :], n_iter)
-        ##### print to check
-        # print("mask_2D shape: ", mask_warp_2D.shape)
-        # print("mask_3D_flattened shape: ", mask_3D_flattened.shape)
-        for i in range(self.batch_size):
-            if i < 5:
-                self.writer.add_image(task + "-mask_warp_origin", mask_warp_2D[i, :, :, :], n_iter)
-                self.writer.add_image(task + "-mask_warp_3D_flattened", mask_3D_flattened[i, :, :], n_iter)
-        # self.writer.add_image(task + '-mask_warp_origin-1', mask_warp_2D[1, :, :, :], n_iter)
-        # self.writer.add_image(task + '-mask_warp_3D_flattened-1', mask_3D_flattened[1, :, :], n_iter)
-        self.writer.add_image(task + "-mask_warp_overlay", mask_overlap, n_iter)
-
-    def tb_scalar_dict(self, losses, task="training"):
-        """
-        # add scalar dictionary to tensorboard
-        :param losses:
-        :param task:
-        :return:
-        """
-        for element in list(losses):
-            self.writer.add_scalar(task + "-" + element, losses[element], self.n_iter)
-            # print (task, '-', element, ": ", losses[element].item())
-
-    def tb_images_dict(self, task, tb_imgs, max_img=5):
-        """
-        # add image dictionary to tensorboard
-        :param task:
-            str (train, val)
-        :param tb_imgs:
-        :param max_img:
-            int - number of images
-        :return:
-        """
-        for element in list(tb_imgs):
-            for idx in range(tb_imgs[element].shape[0]):
-                if idx >= max_img:
-                    break
-                # print(f"element: {element}")
-                self.writer.add_image(
-                    task + "-" + element + "/%d" % idx,
-                    tb_imgs[element][idx, ...],
-                    self.n_iter,
-                )
-
-    def tb_hist_dict(self, task, tb_dict):
-        for element in list(tb_dict):
-            self.writer.add_histogram(task + "-" + element, tb_dict[element], self.n_iter)
-        pass
-
-    def printLosses(self, losses, task="training"):
-        """
-        # print loss for tracking training
-        :param losses:
-        :param task:
-        :return:
-        """
-        for element in list(losses):
-            # print ('add to tb: ', element)
-            print(task, "-", element, ": ", losses[element].item())
-
-    def add2tensorboard_nms(self, img, labels_2D, semi, task="training", batch_size=1):
-        """
-        # deprecated:
-        :param img:
-        :param labels_2D:
-        :param semi:
-        :param task:
-        :param batch_size:
-        :return:
-        """
-
-        boxNms = False
-        n_iter = self.n_iter
-
-        nms_dist = self.config["model"]["nms"]
-        conf_thresh = self.config["model"]["detection_threshold"]
-        # print("nms_dist: ", nms_dist)
-        precision_recall_list = []
-        precision_recall_boxnms_list = []
-        for idx in range(batch_size):
-            semi_flat_tensor = flattenDetection(semi[idx, :, :, :]).detach()
-            semi_flat = toNumpy(semi_flat_tensor)
-            semi_thd = np.squeeze(semi_flat, 0)
-            pts_nms = getPtsFromHeatmap(semi_thd, conf_thresh, nms_dist)
-            semi_thd_nms_sample = np.zeros_like(semi_thd)
-            semi_thd_nms_sample[pts_nms[1, :].astype(np.int32), pts_nms[0, :].astype(np.int32)] = 1
-
-            label_sample = torch.squeeze(labels_2D[idx, :, :, :])
-            # pts_nms = getPtsFromHeatmap(label_sample.numpy(), conf_thresh, nms_dist)
-            # label_sample_rms_sample = np.zeros_like(label_sample.numpy())
-            # label_sample_rms_sample[pts_nms[1, :].astype(np.int32), pts_nms[0, :].astype(np.int32)] = 1
-            label_sample_nms_sample = label_sample
-
-            if idx < 5:
-                result_overlap = img_overlap(
-                    np.expand_dims(label_sample_nms_sample, 0),
-                    np.expand_dims(semi_thd_nms_sample, 0),
-                    toNumpy(img[idx, :, :, :]),
-                )
-                self.writer.add_image(
-                    task + "-detector_output_thd_overlay-NMS" + "/%d" % idx,
-                    result_overlap,
-                    n_iter,
-                )
-            assert semi_thd_nms_sample.shape == label_sample_nms_sample.size()
-            precision_recall = precisionRecall_torch(torch.from_numpy(semi_thd_nms_sample), label_sample_nms_sample)
-            precision_recall_list.append(precision_recall)
-
-            if boxNms:
-                semi_flat_tensor_nms = box_nms(semi_flat_tensor.squeeze(), nms_dist, min_prob=conf_thresh).cpu()
-                semi_flat_tensor_nms = (semi_flat_tensor_nms >= conf_thresh).float()
-
-                if idx < 5:
-                    result_overlap = img_overlap(
-                        np.expand_dims(label_sample_nms_sample, 0),
-                        semi_flat_tensor_nms.numpy()[np.newaxis, :, :],
-                        toNumpy(img[idx, :, :, :]),
-                    )
-                    self.writer.add_image(
-                        task + "-detector_output_thd_overlay-boxNMS" + "/%d" % idx,
-                        result_overlap,
-                        n_iter,
-                    )
-                precision_recall_boxnms = precisionRecall_torch(semi_flat_tensor_nms, label_sample_nms_sample)
-                precision_recall_boxnms_list.append(precision_recall_boxnms)
-
-        precision = np.mean([precision_recall["precision"] for precision_recall in precision_recall_list])
-        recall = np.mean([precision_recall["recall"] for precision_recall in precision_recall_list])
-        self.writer.add_scalar(task + "-precision_nms", precision, n_iter)
-        self.writer.add_scalar(task + "-recall_nms", recall, n_iter)
-        print("-- [%s-%d-fast NMS] precision: %.4f, recall: %.4f" % (task, n_iter, precision, recall))
-        if boxNms:
-            precision = np.mean([precision_recall["precision"] for precision_recall in precision_recall_boxnms_list])
-            recall = np.mean([precision_recall["recall"] for precision_recall in precision_recall_boxnms_list])
-            self.writer.add_scalar(task + "-precision_boxnms", precision, n_iter)
-            self.writer.add_scalar(task + "-recall_boxnms", recall, n_iter)
-            print("-- [%s-%d-boxNMS] precision: %.4f, recall: %.4f" % (task, n_iter, precision, recall))
-
-    def get_heatmap(self, semi, det_loss_type="softmax"):
-        if det_loss_type == "l2":
-            heatmap = self.flatten_64to1(semi)
-        else:
-            heatmap = flattenDetection(semi)
-        return heatmap
-
-    ######## static methods ########
-    @staticmethod
-    def input_to_imgDict(sample, tb_images_dict):
-        # for e in list(sample):
-        #     print("sample[e]", sample[e].shape)
-        #     if (sample[e]).dim() == 4:
-        #         tb_images_dict[e] = sample[e]
-        for e in list(sample):
-            element = sample[e]
-            if type(element) is torch.Tensor:
-                if element.dim() == 4:
-                    tb_images_dict[e] = element
-                # print("shape of ", i, " ", element.shape)
-        return tb_images_dict
-
-    @staticmethod
-    def interpolate_to_dense(coarse_desc, cell_size=8):
-        dense_desc = nn.functional.interpolate(coarse_desc, scale_factor=(cell_size, cell_size), mode="bilinear")
-
-        # norm the descriptor
-        def norm_desc(desc):
-            dn = torch.norm(desc, p=2, dim=1)  # Compute the norm.
-            desc = desc.div(torch.unsqueeze(dn, 1))  # Divide by norm to normalize.
-            return desc
-
-        dense_desc = norm_desc(dense_desc)
-        return dense_desc
-
-
-if __name__ == "__main__":
-    # load config
-    filename = "configs/superpoint_coco_test.yaml"
-    import yaml
-
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-
-    torch.set_default_dtype(torch.float32)
-    torch.set_default_device(device)
-    with open(filename, "r") as f:
-        config = yaml.load(f)
-
+        self.logger = logging.getLogger(__name__)
     
+    def compute_loss(self, outputs, labels_2D, warped_labels, mask, mat_H):
+        labels3D = labels2Dto3D_flattened(labels_2D, cell_size=8).to(self.device)
+       
+        loss_det = nn.functional.cross_entropy(
+            outputs[0],
+            labels3D,
+            reduction='none'
+        )
+        
+        mask = mask.squeeze(1)
+        
+        mask_downsampled = F.avg_pool2d(
+            mask.unsqueeze(1).float(),  # [16, 1, 240, 320]
+            kernel_size=8, 
+            stride=8
+        ).squeeze(1)
+        
+        mask_binary = (mask_downsampled > 0.5).float()
+        valid_pixels = mask_binary.sum()
+        
+        loss_det = (loss_det * mask_binary).sum() / (valid_pixels + 1e-10)
+    
+        if self.config['model']['dense_loss']['enable']:
+            loss_desc = descriptor_loss(
+                outputs[1], # desc
+                outputs[3], # desc_warp
+                mat_H,
+                mask_valid=mask,
+                device=self.device,
+                **self.config['model']['dense_loss']['params']
+            )
+        else:
+            loss_desc = batch_descriptor_loss_sparse(
+                outputs[1],  # desc
+                outputs[3],  # desc_warp
+                mat_H,
+                mask_valid=mask,
+                device=self.device,
+                **self.config['model']['sparse_loss']['params']
+            )
+            
 
-    # data = dataLoader(config, dataset='hpatches')
-    task = config["data"]["dataset"]
+        total_loss = self.lambda_det * loss_det + self.lambda_desc * loss_desc[0]
+        
+        return {
+            'total': total_loss,
+            'det': loss_det,
+            'desc': loss_desc
+        }
+        
+    def train_epoch(self) -> Dict[str, float]:
+        '''Обучение одной эпохи'''
+        self.model.train()
+        
+        total_loss = 0
+        total_det_loss = 0
+        total_desc_loss = 0
+        
+        pbar = tqdm(self.train_loader, desc=f"Epoch {self.current_epoch} Train")
+        
+        for batch_idx, batch in enumerate(pbar):
+            
+            img = batch[0].to(self.device)
+            img = img.permute(0, 3, 1, 2)
+            labels_2D = batch[1].to(self.device)
+            labels_2D = labels_2D.unsqueeze(1)
+            
+            valid_mask = batch[2].to(self.device)
+            warped_img = batch[3].to(self.device)
+            warped_labels_res = batch[4].to(self.device)
+            homography = batch[5].to(self.device)
+                   
+            self.optimizer.zero_grad()
+            
+            forward_res = self.model(img)
+            semi, desc = forward_res['semi'], forward_res['desc']
+            
+            warped_res = self.model(warped_img)
+            semi_warp, desc_warp = warped_res['semi'], warped_res['desc']
 
-    data = dataLoader(config, dataset=task, warp_input=True)
-    # test_set, test_loader = data['test_set'], data['test_loader']
-    train_loader, val_loader = data["train_loader"], data["val_loader"]
+            loss_dict = self.compute_loss(
+                [semi, desc, semi_warp, desc_warp],
+                labels_2D,
+                warped_labels_res,
+                valid_mask,
+                homography
+            )
+            
+            loss = loss_dict['total']
+            
+            loss.backward()
+            
+            self.optimizer.step()
+            
 
-    # model_fe = Train_model_frontend(config)
-    # print('==> Successfully loaded pre-trained network.')
+            total_loss += loss.item()
+            total_det_loss += loss_dict['det'].item()
+            total_desc_loss += loss_dict['desc'][0].item()
+            
+            avg_loss = total_loss / (batch_idx + 1)
+            
+            pbar.set_postfix({
+                'loss': f'{avg_loss:.4f}',
+                'det': f'{loss_dict["det"].item():.4f}',
+                'desc': f'{loss_dict["desc"][0].item():.4f}'
+            })
+            
+            if batch_idx % 10 == 0:
+                step = self.current_epoch * len(self.train_loader) + batch_idx
+                self.writer.add_scalar('Train/Loss_batch', loss.item(), step)
+                self.writer.add_scalar('Train/DetLoss_batch', loss_dict['det'].item(), step)
+                self.writer.add_scalar('Train/DescLoss_batch', loss_dict['desc'][0].item(), step)
+        
+        epoch_metrics = {
+            'loss': total_loss / len(self.train_loader),
+            'det_loss': total_det_loss / len(self.train_loader),
+            'desc_loss': total_desc_loss / len(self.train_loader)
+        }
+        
+        return epoch_metrics
+    
+    def validate(self) -> Dict[str, float]:
+        self.model.eval()
+        
+        total_loss = 0
+        total_det_loss = 0
+        total_desc_loss = 0
+        
+        # Для метрик детекции
+        total_precision = 0
+        total_recall = 0
+        
+        with torch.no_grad():
+            pbar = tqdm(self.val_loader, desc=f"Epoch {self.current_epoch} Train")
+            
+            for batch_idx, batch in enumerate(pbar):
+                img = batch[0].to(self.device)
+                labels_2D = batch[1].to(self.device)
+                valid_mask = batch[2].to(self.device)
+                warped_img = batch[3].to(self.device)
+                warped_labels_res = batch[4].to(self.device)
+                homography = batch[5].to(self.device)
 
-    train_agent = Train_model_frontend(config, device=device)
+                batch_size = img.shape[0]
+                semi, desc = self.model(img)
+                semi_warp, desc_warp = self.model(warped_img)
+                
+                loss_dict = self.compute_loss(
+                    [semi, desc, semi_warp, desc_warp],
+                    labels_2D,
+                    warped_labels_res,
+                    valid_mask,
+                    homography
+                )
+                
+                loss = loss_dict['total']
+                
+                batch_precision = []
+                batch_recall = []
+                
+                for i in range(batch_size):
+                    heatmap = flattenDetection(semi[i:i+1]).squeeze()
+                    
+                     # Бинаризация по порогу
+                    heatmap_binary = (heatmap > self.detection_threshold).float()
+                    
+                    # Вычисляем precision и recall
+                    metrics = precisionRecall_torch(
+                        heatmap_binary.cpu(),
+                        labels_2D[i].cpu()
+                    )
+                    batch_precision.append(metrics['precision'])
+                    batch_recall.append(metrics['recall'])
+                    
+                total_loss += loss.item()
+                total_det_loss += loss_dict['det'].item()
+                total_desc_loss += loss_dict['desc'].item()
+                total_precision += np.mean(batch_precision)
+                total_recall += np.mean(batch_recall)
+                
+                avg_loss = total_loss / (batch_idx + 1)
+                avg_precision = total_precision / (batch_idx + 1)
+                avg_recall = total_recall / (batch_idx + 1)
+                
+                pbar.set_postfix({
+                    'loss': f'{avg_loss:.4f}',
+                    'prec': f'{avg_precision:.2%}',
+                    'rec': f'{avg_recall:.2%}'
+                })
+                
+                
+            val_metrics = {
+            'loss': total_loss / len(self.val_loader),
+            'det_loss': total_det_loss / len(self.val_loader),
+            'desc_loss': total_desc_loss / len(self.val_loader),
+            'precision': total_precision / len(self.val_loader),
+            'recall': total_recall / len(self.val_loader),
+            'f1': 2 * (total_precision * total_recall) / 
+                  (total_precision + total_recall + 1e-10) / len(self.val_loader)
+            }
+        
+            return val_metrics
+        
+    def save_checkpoint(self, filename: str, is_best: bool = False):
+        """Сохранение чекпоинта"""
+        checkpoint = {
+            'epoch': self.current_epoch,
+            'model_state_dict': self.model.state_dict(),
+            'optimizer_state_dict': self.optimizer.state_dict(),
+            'best_val_loss': self.best_val_loss,
+            'patience_counter': self.patience_counter,
+            'config': self.config,
+        }
+        
+        torch.save(checkpoint, self.save_dir / filename)
+        
+        if is_best:
+            torch.save(checkpoint, self.save_dir / 'best_model.pth')
+            self.logger.info(f"Saved best model to {self.save_dir / 'best_model.pth'}")
+            
+            
+    def load_checkpoint(self, checkpoint_path: str):
+        """Загрузка чекпоинта"""
+        checkpoint = torch.load(checkpoint_path, map_location=self.device)
+        self.model.load_state_dict(checkpoint['model_state_dict'])
+        self.optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+        self.current_epoch = checkpoint['epoch']
+        self.best_val_loss = checkpoint['best_val_loss']
+        self.patience_counter = checkpoint['patience_counter']
+        
+        self.logger.info(f"Loaded checkpoint from {checkpoint_path}")
+        self.logger.info(f"Resuming from epoch {self.current_epoch}")
+        
+    def log_metrics(self, train_metrics: Dict, val_metrics: Dict):
+        """Логирование метрик в TensorBoard и консоль"""
+        # TensorBoard
+        self.writer.add_scalar('Loss/Train', train_metrics['loss'], self.current_epoch)
+        self.writer.add_scalar('Loss/Val', val_metrics['loss'], self.current_epoch)
+        self.writer.add_scalar('Loss/Det_Train', train_metrics['det_loss'], self.current_epoch)
+        self.writer.add_scalar('Loss/Det_Val', val_metrics['det_loss'], self.current_epoch)
+        self.writer.add_scalar('Loss/Desc_Train', train_metrics['desc_loss'], self.current_epoch)
+        self.writer.add_scalar('Loss/Desc_Val', val_metrics['desc_loss'], self.current_epoch)
+        
+        # Метрики детекции
+        self.writer.add_scalar('Metrics/Precision', val_metrics['precision'], self.current_epoch)
+        self.writer.add_scalar('Metrics/Recall', val_metrics['recall'], self.current_epoch)
+        self.writer.add_scalar('Metrics/F1', val_metrics['f1'], self.current_epoch)
+        
+        # Learning rate
+        current_lr = self.optimizer.param_groups[0]['lr']
+        self.writer.add_scalar('LR', current_lr, self.current_epoch)
+        
+        # Вывод в консоль
+        self.logger.info(
+            f"Epoch {self.current_epoch:03d} | "
+            f"Train Loss: {train_metrics['loss']:.4f} (D:{train_metrics['det_loss']:.4f}, R:{train_metrics['desc_loss']:.4f}) | "
+            f"Val Loss: {val_metrics['loss']:.4f} (D:{val_metrics['det_loss']:.4f}, R:{val_metrics['desc_loss']:.4f}) | "
+            f"Prec: {val_metrics['precision']:.2%} | Rec: {val_metrics['recall']:.2%} | F1: {val_metrics['f1']:.3f} | "
+            f"LR: {current_lr:.2e}"
+        )
+        
+    def train(self):
+        '''Основной цикл обучения'''
+        self.logger.info('SuperPoint training started')
+        self.logger.info("=" * 50)
+        self.logger.info(f"Device: {self.device}")
+        self.logger.info(f"Model parameters: {sum(p.numel() for p in self.model.parameters()):,}")
+        self.logger.info(f"Training samples: {len(self.train_loader.dataset)}")
+        self.logger.info(f"Validation samples: {len(self.val_loader.dataset)}")
+        self.logger.info(f"Lambda det: {self.lambda_det}, Lambda desc: {self.lambda_desc}")
+        self.logger.info(f"Detection threshold: {self.detection_threshold}")
+        
+        start_time = time.time()
+        
+        for epoch in range(self.current_epoch, self.max_epochs): 
+            train_metrics = self.train_epoch()
+            
+            val_metrics = self.validate()
+            
+            self.log_metrics(train_metrics, val_metrics)
+            
+            if val_metrics['loss'] < self.best_val_loss:
+                self.best_val_loss = val_metrics['loss']
+                self.save_checkpoint('best_model.pth', is_best=True)
+                self.patience_counter = 0
+                self.logger.info(f"New best model! Val loss: {val_metrics['loss']:.4f}")
+            else:
+                self.patience_counter += 1
+                if self.patience_counter >= self.early_stopping_patience:
+                    self.logger.info(f'Stop triggered after {epoch} epochs')
+                    break
+                
+            if epoch % 10 == 0:
+                self.save_checkpoint(f'checkpoint_epoch_{epoch}.pth')
+                
+        self.save_checkpoint('final_model.pth')
 
-    train_agent.train_loader = train_loader
-    # train_agent.val_loader = val_loader
-
-    train_agent.loadModel()
-    train_agent.dataParallel()
-    train_agent.train()
-
-    # epoch += 1
-    # try:
-    #     model_fe.train()
-    # # catch exception
-    # except KeyboardInterrupt:
-    #     logging.info("ctrl + c is pressed. save model")
-    # is_best = True
+        self.writer.close()
+        training_time = time.time() - start_time
+        
+        self.logger.info("=" * 50)
+        self.logger.info(f"Training completed in {training_time:.2f} seconds")
+        self.logger.info(f"Best validation loss: {self.best_val_loss:.4f}")
+        self.logger.info(f"Final model saved to: {self.save_dir / 'final_model.pth'}")
+        
+        
+if __name__ == '__main__':
+    cfg = OmegaConf.load("params.yaml")
+    
+    model = SuperPointNet_gauss2()
+    data = dataLoader(cfg['prepare_synthetic_dataset'])
+    
+    train_loader, val_loader = data['train_loader'], data['val_loader']
+    
+    trainer = Train_model_frontend(
+        model,
+        train_loader, 
+        val_loader,
+        cfg,
+        device='cuda',
+        learning_rate=1e-3,
+        save_dir='checkpoints/my_model',
+        max_epochs=200,
+        early_stopping_patience=20
+    )
+    
+    trainer.train()
+    

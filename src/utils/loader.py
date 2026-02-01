@@ -3,11 +3,17 @@ import logging
 import os
 from pathlib import Path
 
+import rootutils
 import numpy as np
 import torch
 import torchvision.transforms as transforms
 import yaml
 from omegaconf import OmegaConf
+
+from datasets.SyntheticDataset import SyntheticDataset as Dataset
+   
+
+root = rootutils.setup_root(__file__, indicator="src", pythonpath=True)
 
 
 def worker_init_fn(worker_id):
@@ -28,12 +34,12 @@ def get_module(module_path, attribute_name):
     """
     Динамически импортирует класс или функцию.
     """
-
-    module = importlib.import_module(module_path)
-    if attribute_name is None:
-        return module
+    import importlib
+    if module_path == '':
+        mod = importlib.import_module(module_path)
     else:
-        return getattr(module, attribute_name)
+        mod = importlib.import_module('{}.{}'.format(module_path, attribute_name))
+    return getattr(mod, attribute_name)
 
 
 def get_save_path(output_dir):
@@ -53,14 +59,16 @@ def load_config(config_path):
 
 
 def dataLoader(config, dataset="SyntheticDataset", warp_input=False, train=True, val=True):
-    if torch.cuda.is_available():
-        generator = torch.Generator(device="cuda")
-    else:
-        generator = torch.Generator(device="cpu")
+    # if torch.cuda.is_available():
+    #     generator = torch.Generator(device="cuda")
+    # else:
+    #     generator = torch.Generator(device="cpu")
+    generator = torch.Generator(device="cpu")
 
+    
     training_params = config.get("training", {})
-    workers_train = training_params.get("workers_train", 1)  # 16
-    workers_val = training_params.get("workers_val", 1)  # 16
+    workers_train = training_params.get("workers_train", 0)  # 16
+    workers_val = training_params.get("workers_val", 0)  # 16
 
     logging.info(f"workers_train: {workers_train}, workers_val: {workers_val}")
     data_transforms = {
@@ -76,30 +84,19 @@ def dataLoader(config, dataset="SyntheticDataset", warp_input=False, train=True,
         ),
     }
 
-    Dataset = get_module("datasets", dataset)
-    print(f"dataset: {dataset}")
-
-    data_config = config.get("data", {})
-    synthetic_config = config.get("prepare_synthetic_dataset", {})
-    dataset_params_config = config.get("dataset_params", {})
-
-    dataset_params = {**data_config, **synthetic_config, **dataset_params_config}
-    if synthetic_config:
-        dataset_params.update(synthetic_config)
-
     result = {}
 
     if train:
         train_set = Dataset(
             transform=data_transforms["train"],
             task="train",
-            **dataset_params,
+            **config,
         )
         train_loader = torch.utils.data.DataLoader(
             train_set,
             batch_size=config["model"]["batch_size"],
             shuffle=True,
-            pin_memory=True,
+            pin_memory=False,
             num_workers=workers_train,
             worker_init_fn=worker_init_fn,
             generator=generator,
@@ -111,13 +108,13 @@ def dataLoader(config, dataset="SyntheticDataset", warp_input=False, train=True,
         val_set = Dataset(
             transform=data_transforms["val"],
             task="val",
-            **dataset_params,
+            **config,
         )
         val_loader = torch.utils.data.DataLoader(
             val_set,
             batch_size=config["model"]["eval_batch_size"],
             shuffle=True,
-            pin_memory=True,
+            pin_memory=False,
             num_workers=workers_val,
             worker_init_fn=worker_init_fn,
             generator=generator,
@@ -130,3 +127,8 @@ def dataLoader(config, dataset="SyntheticDataset", warp_input=False, train=True,
         logging.info(f"Val samples: {len(val_set)}")
 
     return result
+
+# if __name__ == '__main__':
+#     cfg = OmegaConf.load(root / "src" / "params.yaml")['prepare_synthetic_dataset']
+#     loader = dataLoader(cfg)
+#     print(loader)
