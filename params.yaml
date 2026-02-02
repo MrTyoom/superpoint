@@ -22,3 +22,9 @@ prepare_synthetic_dataset:
 
 train_magic_point:
   seed: ${seed}  
+  test_size: 0.2
+  data_dir: ${synthetic_dataset}
+  batch_size: 64
+  num_workers: 16
+  train_aug:
+    seed: ${seed}
