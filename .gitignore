@@ -5,6 +5,7 @@ build/
 dist/
 wheels/
 data/
+tmp/
 *.egg-info
 .DS_Store
 .venv
