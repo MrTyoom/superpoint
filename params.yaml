@@ -19,3 +19,6 @@ prepare_synthetic_dataset:
     draw_stripes: 20000
     draw_cube: 20000
     gaussian_noise: 20000
+
+train_magic_point:
+  seed: ${seed}  
