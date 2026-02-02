@@ -1,0 +1,45 @@
+seed: 0xC00FFEE
+
+# Модель
+model:
+  batch_size: 64
+  eval_batch_size: 16
+  
+
+# Данные
+data:
+  synthetic_dataset: "data/synthetic_dataset"
+  dataset: "SyntheticDataset_gaussian"  # имя модуля датасета
+  image_size: [240, 320] # размер синтетических изображений
+
+# Подготовка синтетических данных
+prepare_synthetic_dataset:
+  seed: ${seed}
+  data_dir: ${data.synthetic_dataset}
+  blur_size: 21
+  image_size: ${data.image_size}
+  background_size: [960, 1280]
+  primitives: 
+    draw_lines: 20000
+    draw_polygon: 20000
+    draw_multiple_polygons: 20000
+    draw_ellipses: 20000
+    draw_star: 20000
+    draw_checkerboard: 20000
+    draw_stripes: 20000
+    draw_cube: 20000
+    gaussian_noise: 20000
+
+# Тренировка
+training:
+  workers_train: 4
+  workers_val: 2
+  learning_rate: 0.001
+
+# Дополнительные параметры датасета (если нужны)
+dataset_params:
+  warp_input: true
+  normalize: true
+
+train_iter: 200000
+front_end_model: "Train_model_heatmap"

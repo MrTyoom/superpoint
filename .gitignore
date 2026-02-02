@@ -1,0 +1,12 @@
+__pycache__/
+.ipynb_checkpoints
+*.py[oc]
+build/
+dist/
+wheels/
+data/
+*.egg-info
+.DS_Store
+.venv
+.vscode
+.idea

@@ -14,6 +14,7 @@ from src.utils import make_dir
 
 # Color functions
 
+
 def get_random_color(background_color, random_state):
     """Output a random scalar in grayscale with a least a small
     contrast with the background color
@@ -45,6 +46,7 @@ def get_different_color(previous_colors, random_state, min_dist=50, max_count=20
 
 
 # Geometry functions
+
 
 def ccw(A, B, C, dim):
     """Check if the points are listed in counter-clockwise order
@@ -96,6 +98,7 @@ def overlap(center, rad, centers, rads):
 
 
 # Dataset functions
+
 
 def draw_lines(image, random_state, nb_lines=10):
     """Draw random lines and output the positions of the endpoints
