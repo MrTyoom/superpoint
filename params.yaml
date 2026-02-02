@@ -1,25 +1,45 @@
-seed: 0xC00FFEE # seed для воспроизводимости
+seed: 0xC00FFEE
 
-synthetic_dataset: data/synthetic_dataset # директория для синтетических изображений
+# Модель
+model:
+  batch_size: 64
+  eval_batch_size: 16
+  
 
+# Данные
+data:
+  synthetic_dataset: "data/synthetic_dataset"
+  dataset: "SyntheticDataset_gaussian"  # имя модуля датасета
+  image_size: [240, 320] # размер синтетических изображений
+
+# Подготовка синтетических данных
 prepare_synthetic_dataset:
   seed: ${seed}
-  data_dir: ${synthetic_dataset}
-  blur_size: 21 # размер ядра размытия фонового изображения
-  image_size: [240, 320] # размеры синтетических изображений
-  background_size: [960, 1280] # размер фонового изображения
+  data_dir: ${data.synthetic_dataset}
+  blur_size: 21
+  image_size: ${data.image_size}
+  background_size: [960, 1280]
   primitives: 
-    # генерируемые примитивы и их размер
-    
-    draw_lines: 20_000
-    draw_polygon: 20_000
-    draw_multiple_polygons: 20_000
-    draw_ellipses: 20_000
-    draw_star: 20_000
-    draw_checkerboard: 20_000
-    draw_stripes: 20_000
-    draw_cube: 20_000
-    gaussian_noise: 20_000
-    
-    # остальные параметры пока сделать параметрами по умолчанию 
-    # в соответствующих функциях генерации примитивов
+    draw_lines: 20000
+    draw_polygon: 20000
+    draw_multiple_polygons: 20000
+    draw_ellipses: 20000
+    draw_star: 20000
+    draw_checkerboard: 20000
+    draw_stripes: 20000
+    draw_cube: 20000
+    gaussian_noise: 20000
+
+# Тренировка
+training:
+  workers_train: 4
+  workers_val: 2
+  learning_rate: 0.001
+
+# Дополнительные параметры датасета (если нужны)
+dataset_params:
+  warp_input: true
+  normalize: true
+
+train_iter: 200000
+front_end_model: "Train_model_heatmap"
