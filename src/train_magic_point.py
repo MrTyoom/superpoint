@@ -2,6 +2,7 @@ from pathlib import Path
 
 import rootutils
 import torch
+from tqdm import tqdm
 from omegaconf import OmegaConf
 
 rootutils.setup_root(__file__, indicator="src", pythonpath=True) # noqa
@@ -20,6 +21,10 @@ def main(cfg):
     
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     print(device)
+
+
+    for data in tqdm(train_loader, leave=False):
+        pass
 
 
 if __name__ == "__main__":

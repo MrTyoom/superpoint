@@ -1,5 +1,6 @@
 __pycache__/
 .ipynb_checkpoints
+.pytest_cache
 *.py[oc]
 build/
 dist/
@@ -10,4 +11,4 @@ tmp/
 .DS_Store
 .venv
 .vscode
-.idea
+uv.lock

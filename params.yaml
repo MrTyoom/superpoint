@@ -1,7 +1,7 @@
 seed: 0xC00FFEE
 
 synthetic_dataset: data/synthetic_dataset
-image_size: [240, 320] # размер синтетических изображений
+image_size: [120, 160] # размер синтетических изображений
 
 prepare_synthetic_dataset:
   seed: ${seed}
@@ -24,7 +24,40 @@ train_magic_point:
   seed: ${seed}  
   test_size: 0.2
   data_dir: ${synthetic_dataset}
-  batch_size: 64
-  num_workers: 16
-  train_aug:
-    seed: ${seed}
+  batch_size: 4 # 64
+  num_workers: 0 # 16
+  augmentation:
+    train:
+      homographic:
+        enable: true
+        enable_train: true
+        enable_val: false
+        params:
+          allow_artifacts: true
+          max_angle: 1.57
+          patch_ratio: 0.8
+          perspective: true
+          perspective_amplitude_x: 0.2
+          perspective_amplitude_y: 0.2
+          rotation: true
+          scaling: true
+          scaling_amplitude: 0.2
+          translation: true
+          translation_overflow: 0.05
+        valid_border_margin: 2
+      photometric:
+        enable: true
+        params:
+          additive_gaussian_noise:
+            stddev_range: [0, 15]
+          additive_shade:
+            kernel_size_range: [50, 100]
+            transparency_range: [-0.5, 0.8]
+          additive_speckle_noise:
+            prob_range: [0, 0.0035]
+          motion_blur:
+            max_kernel_size: 7
+          random_brightness:
+            max_abs_change: 75
+          random_contrast:
+            strength_range: [0.3, 1.8]
