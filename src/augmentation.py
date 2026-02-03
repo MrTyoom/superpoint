@@ -80,17 +80,20 @@ class ImgAugTransform:
             mask = cv2.GaussianBlur(mask.astype(np.float32), (kernel_size, kernel_size), 0)
             shaded = img * (1 - transparency * mask[..., np.newaxis] / 255.)
 
-            return np.clip(shaded, 0, 255)
+            shaded = np.clip(shaded, 0, 255)
+            image = shaded[:, :].astype(np.uint8)
 
-        shaded = _py_additive_shade(image)
-        return shaded
+            return image
+
+        image = _py_additive_shade(image[..., None])
+
+        return image
 
     def __call__(self, img):
         img = self.aug.augment_image(img)
         
         if self.config['params']['additive_shade']:
-            params = self.config['params']
-            img = self.additive_shade(img[..., None], **params['additive_shade'])
-            img = img[:, :].astype(np.uint8)
+            params = self.config['params']['additive_shade']
+            img = self.additive_shade(img, **params)
 
         return img
