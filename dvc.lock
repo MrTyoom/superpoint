@@ -1,0 +1,10 @@
+schema: '2.0'
+stages:
+  prepare_synthetic_data:
+    cmd: python scripts/prepare_synthetic_data.py
+    outs:
+    - path: data/synthetic_dataset
+      hash: md5
+      md5: 57ea1cd3d349d90482d0c7efdc8596df.dir
+      size: 1063771120
+      nfiles: 320000

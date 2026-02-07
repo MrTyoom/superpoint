@@ -1,0 +1,49 @@
+default_language_version:
+  python: python3.12
+
+repos:
+  - repo: http://github.com/pre-commit/pre-commit-hooks
+    rev: v4.6.0
+    hooks:
+      - id: check-added-large-files
+        args: [--maxkb=512]
+      - id: check-yaml
+        args:
+          - '--unsafe'
+      - id: check-toml
+      - id: check-merge-conflict
+      - id: end-of-file-fixer
+      # - id: trailing-whitespace
+
+  - repo: http://github.com/astral-sh/ruff-pre-commit
+    # Ruff version.
+    rev: v0.15.0
+    hooks:
+      # Run the linter.
+      - id: ruff-check
+        types_or: [ python, pyi ]
+        args: [ --fix ]
+      # Run the formatter.
+      - id: ruff-format
+        types_or: [ python, pyi ]
+
+  - repo: 'http://github.com/pycqa/isort'
+    rev: 5.12.0
+    hooks:
+      - id: isort
+
+  - repo: https://github.com/pycqa/flake8
+    rev: 7.3.0  # Используйте актуальную версию
+    hooks:
+      - id: flake8
+        additional_dependencies:
+          - wemake-python-styleguide
+          - flake8-pyproject
+        # По умолчанию flake8 ищет setup.cfg, 
+        # flake8-pyproject заставит его заглянуть в pyproject.toml
+
+  - repo: http://github.com/pre-commit/mirrors-mypy
+    rev: 'v1.5.1'
+    hooks:
+    - id: mypy
+      additional_dependencies: [types-PyYAML>=6.0.12.12]

@@ -2,24 +2,17 @@ seed: 0xC00FFEE # seed для воспроизводимости
 
 synthetic_dataset: data/synthetic_dataset # директория для синтетических изображений
 
-prepare_synthetic_dataset:
+prepare_synthetic_data:
   seed: ${seed}
   data_dir: ${synthetic_dataset}
-  blur_size: 21 # размер ядра размытия фонового изображения
-  image_size: [240, 320] # размеры синтетических изображений
-  background_size: [960, 1280] # размер фонового изображения
+  blur_size: 21
+  image_size: [120, 160]
   primitives: 
-    # генерируемые примитивы и их размер
-    
     draw_lines: 20_000
     draw_polygon: 20_000
-    draw_multiple_polygons: 20_000
     draw_ellipses: 20_000
     draw_star: 20_000
     draw_checkerboard: 20_000
     draw_stripes: 20_000
     draw_cube: 20_000
     gaussian_noise: 20_000
-    
-    # остальные параметры пока сделать параметрами по умолчанию 
-    # в соответствующих функциях генерации примитивов
