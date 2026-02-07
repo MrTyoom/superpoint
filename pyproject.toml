@@ -9,6 +9,7 @@ dependencies = [
     "flake8-pyproject>=1.2.4",
     "isort>=7.0.0",
     "joblib>=1.5.3",
+    "lightning>=2.6.1",
     "omegaconf>=2.3.0",
     "opencv-python-headless>=4.13.0.92",
     "pre-commit>=4.5.1",

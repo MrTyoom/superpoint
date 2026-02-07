@@ -16,3 +16,10 @@ prepare_synthetic_data:
     draw_stripes: 20_000
     draw_cube: 20_000
     gaussian_noise: 20_000
+
+train_magicpoint:
+  seed: ${seed}
+  data_dir: ${synthetic_dataset}
+  train_size: 0.8
+  batch_size: 64
+  num_workers: 0
