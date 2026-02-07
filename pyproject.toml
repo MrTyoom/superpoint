@@ -5,13 +5,14 @@ description = "DLOPS Course"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
+    "numpy==1.26.4",
     "dvc>=3.66.1",
     "flake8-pyproject>=1.2.4",
+    "imgaug>=0.4.0",
     "isort>=7.0.0",
     "joblib>=1.5.3",
     "lightning>=2.6.1",
     "omegaconf>=2.3.0",
-    "opencv-python-headless>=4.13.0.92",
     "pre-commit>=4.5.1",
     "rootutils>=1.0.7",
     "ruff>=0.15.0",

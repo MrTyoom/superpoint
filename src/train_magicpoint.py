@@ -21,6 +21,9 @@ def main(cfg: DictConfig) -> None:
     val_loader = loader.val_dataloader()
     LOG.info("val loader size: {0}".format(len(val_loader)))
 
+    for step, _ in enumerate(train_loader):
+        LOG.info("batch: {0}".format(step))
+
 
 if __name__ == "__main__":
     cfg = OmegaConf.load("params.yaml")

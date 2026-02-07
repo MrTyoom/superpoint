@@ -15,3 +15,9 @@
     # генерация синтетических данных
     dvc repro prepare_synthetic_data
 ```
+
+#### **Pre-commit check**
+
+```bash
+    make pre-commit-check
+```
