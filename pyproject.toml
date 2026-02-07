@@ -1,0 +1,58 @@
+[project]
+name = "superpoint"
+version = "0.1.0"
+description = "DLOPS Course"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "dvc>=3.66.1",
+    "flake8-pyproject>=1.2.4",
+    "isort>=7.0.0",
+    "joblib>=1.5.3",
+    "omegaconf>=2.3.0",
+    "opencv-python-headless>=4.13.0.92",
+    "pre-commit>=4.5.1",
+    "rootutils>=1.0.7",
+    "ruff>=0.15.0",
+    "torch>=2.9.1",
+    "torchvision>=0.24.1",
+    "wemake-python-styleguide>=1.5.0",
+]
+
+[tool.ruff]
+# Включаем стандартные правила (Pyflakes, pycodestyle)
+select = ["E", "F", "W", "C90", "I"]
+# Игнорируем правила, которые будут перекрываться проверками WPS
+ignore = ["E402"]
+target-version = "py312"
+line-length = 79
+indent-width = 4
+output-format = "full"
+show-fixes = true
+exclude = [
+    "scripts/*.py",
+]
+
+[tool.flake8]
+exclude = [
+    "scripts/*.py",
+]
+# Оставляем только правила WPS, так как остальное проверит Ruff
+select = "WPS"
+# Настройка специфичных для WPS параметров
+max-line-length = 79
+show-source = true
+ignore = ["WPS111", "WPS420"]
+max-methods = 10
+
+[tool.isort]
+profile = "wemake"
+line_length = 79
+src_paths = ["src"]
+
+[tool.mypy]
+exclude = [
+    "^.venv/",       
+    "^scripts/",  
+]
+explicit_package_bases = true

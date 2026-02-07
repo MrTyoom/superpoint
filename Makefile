@@ -1,64 +1,36 @@
-.PHONY: format lint check fix help
+.PHONY: *
+.SILENT:
 
-# Default variables
-PYTHON_FILES := .
-RUFF_CONFIG := ruff.toml
-ISORT_CONFIG := isort.toml
+VENV_PATH=.venv
+PYTHON=$(VENV_PATH)/bin/python3
 
-help:
-	@echo "Available commands:"
-	@echo "  make format    - Format code with ruff and isort"
-	@echo "  make lint      - Run linting checks (ruff + isort)"
-	@echo "  make check     - Check code without making changes"
-	@echo "  make fix       - Auto-fix what can be fixed"
-	@echo "  make all       - Run format and lint"
+## setup environment
+setup: install
+	@echo "⚫ Installing pre-commit hook"
+	$(PYTHON) -m pre_commit install
 
-# Format code with both tools
-format:
-	@echo "Formatting code with ruff..."
-	ruff format $(PYTHON_FILES)
-	@echo "Sorting imports with isort..."
-	isort $(PYTHON_FILES)
+## install dependencies
+install: venv
+	@echo "⚫ Install the repo dependencies"
+	uv sync
 
-# Run linting checks
-lint:
-	@echo "Running ruff check..."
-	ruff check $(PYTHON_FILES)
-	@echo "Running isort check..."
-	isort --check-only --diff $(PYTHON_FILES)
+## python venv setup with uv
+venv:
+	@echo "⚫ Install uv (if not already installed)"
+	command -v uv &> /dev/null || curl -LsSf https://astral.sh/uv/install.sh | sh
 
-# Check code without making changes
-check: lint
-
-# Auto-fix what can be fixed
-fix:
-	@echo "Fixing code with ruff..."
-	ruff check --fix $(PYTHON_FILES)
-	@echo "Fixing imports with isort..."
-	isort $(PYTHON_FILES)
+	@echo "⚫ Create a .venv local virtual environment (if it doesn't exist)"
+	[ -d ".venv" ] || uv venv
 
 
-all: format lint
+## checking code format
+pre-commit-check:
+	@echo "⚫ Checking code format..."
+	. .venv/bin/activate && git ls-files -- '*.py' | xargs pre-commit run --files
 
-ruff-format:
-	ruff format $(PYTHON_FILES)
-
-ruff-check:
-	ruff check $(PYTHON_FILES)
-
-ruff-fix:
-	ruff check --fix $(PYTHON_FILES)
-
-isort-check:
-	isort --check-only --diff $(PYTHON_FILES)
-
-isort-fix:
-	isort $(PYTHON_FILES)
-
-format-file:
-	ruff format $(file)
-	isort $(file)
-
-lint-file:
-	ruff check $(file)
-	isort --check-only --diff $(file)
+## remove all artifacts
+clean:
+	@echo "⚫ Remove all artifacts..."
+	find . -name '__pycache__' -exec rm -fr {} +
+	find . -type f -name '.DS_Store' -delete
+	rm -fr .ruff_cache
