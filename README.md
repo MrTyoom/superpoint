@@ -1,11 +1,15 @@
 #### **Подготовка и активация окружения**
 ```bash
     # setup uv environment 
-    # + install requirements 
-    # + pre-commit hook
+    command -v uv &> /dev/null || curl -LsSf https://astral.sh/uv/install.sh | sh
+
+    # Create a .venv local virtual environment (if it doesn't exist)
+    [ -d ".venv" ] || uv venv
+    
+    # install requirements + pre-commit hook
     make setup
 
-    # активация окружения
+    # activate environment
     source .venv/bin/activate
 ```
 

@@ -1,8 +1,12 @@
+from typing import NewType
+
 import cv2
 import numpy as np
 from imgaug import augmenters as iaa
 from numpy.random import rand, randint
 from omegaconf import DictConfig
+
+TupleInt = NewType("TupleInt", tuple[int, int])
 
 
 def get_photometric_augmentation(cfg: DictConfig):
@@ -29,19 +33,17 @@ def get_photometric_augmentation(cfg: DictConfig):
     return iaa.Sequential(aug)
 
 
-def get_ellipse_axes(dim: int) -> tuple[int, int]:
+def get_ellipse_axes(dim: int) -> TupleInt:
     ax = int(max(rand() * dim, dim / 5))
     ay = int(max(rand() * dim, dim / 5))
-    return ax, ay
+    return TupleInt((ax, ay))
 
 
-def get_ellipse_center(
-    img_shape: tuple[int, int], axes: tuple[int, int]
-) -> tuple[int, int]:
+def get_ellipse_center(img_shape: TupleInt, axes: TupleInt) -> TupleInt:
     max_rad = max(axes)
     x = randint(max_rad, img_shape[1] - max_rad)
     y = randint(max_rad, img_shape[0] - max_rad)
-    return x, y
+    return TupleInt((x, y))
 
 
 def blur_mask(kernel_size_range, mask):
@@ -50,9 +52,7 @@ def blur_mask(kernel_size_range, mask):
     if (kernel_size % 2) == 0:
         kernel_size += 1
 
-    mask = cv2.GaussianBlur(
-        mask.astype(np.float32), (kernel_size, kernel_size), 0
-    )
+    mask = cv2.GaussianBlur(mask.astype(np.float32), (kernel_size, kernel_size), 0)
 
     return mask
 
@@ -66,7 +66,7 @@ def shade_image(transparency_range, mask, img):
     return img
 
 
-def generate_mask(cfg: DictConfig, img_shape: tuple[int, int]):
+def generate_mask(cfg: DictConfig, img_shape: TupleInt):
     mask = np.zeros(img_shape, np.uint8)
     color = 255
     max_angle = 360
@@ -77,7 +77,7 @@ def generate_mask(cfg: DictConfig, img_shape: tuple[int, int]):
 
         cv2.ellipse(
             mask,
-            get_ellipse_center(img_shape, axes),
+            get_ellipse_center(img_shape, TupleInt(axes)),
             axes,
             np.random.rand() * min_angle,
             0,
@@ -95,10 +95,7 @@ def additive_shade(cfg: DictConfig, mask, img):
     if (kernel_size % 2) == 0:
         kernel_size += 1
 
-    mask = cv2.GaussianBlur(
-        mask.astype(np.float32), (kernel_size, kernel_size), 0
-    )
-
+    mask = cv2.GaussianBlur(mask.astype(np.float32), (kernel_size, kernel_size), 0)
     img = shade_image(cfg.transparency_range, mask, img)
 
     return img

@@ -5,23 +5,11 @@ VENV_PATH=.venv
 PYTHON=$(VENV_PATH)/bin/python3
 
 ## setup environment
-setup: install
-	@echo "⚫ Installing pre-commit hook"
-	$(PYTHON) -m pre_commit install
-
-## install dependencies
-install: venv
+setup:
 	@echo "⚫ Install the repo dependencies"
 	uv sync
-
-## python venv setup with uv
-venv:
-	@echo "⚫ Install uv (if not already installed)"
-	command -v uv &> /dev/null || curl -LsSf https://astral.sh/uv/install.sh | sh
-
-	@echo "⚫ Create a .venv local virtual environment (if it doesn't exist)"
-	[ -d ".venv" ] || uv venv
-
+	@echo "⚫ Installing pre-commit hook"
+	$(PYTHON) -m pre_commit install
 
 ## checking code format
 pre-commit-check:

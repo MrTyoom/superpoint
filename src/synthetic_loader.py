@@ -8,6 +8,7 @@ from omegaconf import DictConfig
 from torch.utils.data import DataLoader, Dataset
 
 from src.augmentation import PhotometricAugmentation
+from src.homography import sample_homography
 
 
 class DataSet(Dataset):
@@ -24,20 +25,21 @@ class DataSet(Dataset):
 
     def __getitem__(self, index):
         src_image = cv2.imread(self.image_files[index], cv2.IMREAD_GRAYSCALE)
-
         # H, W = src_image.shape
         # src_points = np.load(self.annot_files[index])  # x, y
         # src_points = torch.from_numpy(src_points)
-        # get_labels
+        # # get_labels
         # src_labels = torch.zeros(H, W)
         # pnts_int = src_points.round().long()
         # src_labels[pnts_int[:, 1], pnts_int[:, 0]] = 1
 
         if self.aug_cfg is not None:
             aug = PhotometricAugmentation(self.aug_cfg.photometric)
-            aug_image = aug(src_image)
+            src_image = aug(src_image)
 
-        return aug_image
+        homography = sample_homography(self.aug_cfg.homographic, np.array([2, 2]), shift=-1)
+
+        return src_image, homography
 
 
 class Loader(LightningDataModule):
@@ -80,11 +82,9 @@ class Loader(LightningDataModule):
 
     def split_files(self):
         cfg = self.hparams.cfg
-        files = [
-            f
-            for f in Path(cfg.data_dir).glob("**/*.png")
-            if f.with_suffix(".npy").exists()
-        ]
+
+        files = Path(cfg.data_dir).glob("**/*.png")
+        files = [f for f in files if f.with_suffix(".npy").exists()]
         np.random.shuffle(files)
 
         train_size = cfg.train_size

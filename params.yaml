@@ -25,21 +25,19 @@ train_magicpoint:
   num_workers: 0
   augmentation:
     homographic:
-      enable: true
-      enable_train: true
-      enable_val: false
-      params:
-        allow_artifacts: true
-        max_angle: 1.57
-        patch_ratio: 0.8
-        perspective: true
-        perspective_amplitude_x: 0.2
-        perspective_amplitude_y: 0.2
-        rotation: true
-        scaling: true
-        scaling_amplitude: 0.2
-        translation: true
-        translation_overflow: 0.05
+      allow_artifacts: true
+      max_angle: 1.57
+      patch_ratio: 0.8
+      perspective: true
+      perspective_amplitude_x: 0.2
+      perspective_amplitude_y: 0.2
+      rotation: true
+      scaling: true
+      scaling_amplitude: 0.2
+      translation: true
+      translation_overflow: 0.05
+      n_scales: 5
+      n_angles: 25
       valid_border_margin: 2
     photometric:
       random_brightness:

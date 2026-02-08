@@ -1,10 +1,6 @@
 from omegaconf import DictConfig
 
-from src.augment_helper import (
-    additive_shade,
-    generate_mask,
-    get_photometric_augmentation,
-)
+from src.augment_helper import additive_shade, generate_mask, get_photometric_augmentation
 
 
 class PhotometricAugmentation:
