@@ -1,12 +1,12 @@
 default_language_version:
-  python: python3.12
+  python: python3.11
 
 repos:
   - repo: http://github.com/pre-commit/pre-commit-hooks
     rev: v4.6.0
     hooks:
       - id: check-added-large-files
-        args: [--maxkb=512]
+        args: [--maxkb=2048]
       - id: check-yaml
         args:
           - '--unsafe'

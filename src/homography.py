@@ -142,5 +142,6 @@ def sample_homography(cfg: DictConfig, shape: NDArray, shift: int) -> NDArray:
     pts2 *= shape[np.newaxis]
 
     homography = cv2.getPerspectiveTransform(np.float32(pts1 + shift), np.float32(pts2 + shift))
+    homography = np.linalg.inv(homography)
 
     return homography
