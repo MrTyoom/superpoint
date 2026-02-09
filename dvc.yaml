@@ -1,6 +1,5 @@
 stages:
   prepare_synthetic_data:
     cmd: python scripts/prepare_synthetic_data.py
-    outs:
-    - data/synthetic_dataset
-  
+    params:
+    - prepare_synthetic_data

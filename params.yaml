@@ -16,3 +16,44 @@ prepare_synthetic_data:
     draw_stripes: 20_000
     draw_cube: 20_000
     gaussian_noise: 20_000
+
+train_magicpoint:
+  seed: ${seed}
+  data_dir: ${synthetic_dataset}
+  train_size: 0.8
+  batch_size: 128
+  num_workers: 0
+  augmentation:
+    homographic:
+      allow_artifacts: true
+      max_angle: 1.57
+      patch_ratio: 0.8
+      perspective: true
+      perspective_amplitude_x: 0.2
+      perspective_amplitude_y: 0.2
+      rotation: true
+      scaling: true
+      scaling_amplitude: 0.2
+      translation: true
+      translation_overflow: 0.05
+      n_scales: 5
+      n_angles: 25
+      valid_border_margin: 2
+    photometric:
+      random_brightness:
+        max_abs_change: 75
+      random_contrast:
+        strength_range: [0.3, 1.8]
+      additive_gaussian_noise:
+        stddev_range: [0, 15]
+      additive_speckle_noise:
+        prob_range: [0, 0.0035]
+      motion_blur:
+        max_kernel_size: 7
+      additive_shade:
+        kernel_size_range: [50, 100]
+        transparency_range: [-0.5, 0.8]
+        nb_ellipses: 20
+        
+        
+        

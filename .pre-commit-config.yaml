@@ -1,12 +1,12 @@
 default_language_version:
-  python: python3.12
+  python: python3.11
 
 repos:
   - repo: http://github.com/pre-commit/pre-commit-hooks
     rev: v4.6.0
     hooks:
       - id: check-added-large-files
-        args: [--maxkb=512]
+        args: [--maxkb=2048]
       - id: check-yaml
         args:
           - '--unsafe'
@@ -33,14 +33,12 @@ repos:
       - id: isort
 
   - repo: https://github.com/pycqa/flake8
-    rev: 7.3.0  # Используйте актуальную версию
+    rev: 7.3.0
     hooks:
       - id: flake8
         additional_dependencies:
           - wemake-python-styleguide
           - flake8-pyproject
-        # По умолчанию flake8 ищет setup.cfg, 
-        # flake8-pyproject заставит его заглянуть в pyproject.toml
 
   - repo: http://github.com/pre-commit/mirrors-mypy
     rev: 'v1.5.1'
