@@ -1,0 +1,22 @@
+schema: '2.0'
+stages:
+  prepare_synthetic_data:
+    cmd: python scripts/prepare_synthetic_data.py
+    params:
+      params.yaml:
+        prepare_synthetic_data:
+          seed: ${seed}
+          data_dir: ${synthetic_dataset}
+          blur_size: 21
+          image_size:
+          - 120
+          - 160
+          primitives:
+            draw_lines: 20000
+            draw_polygon: 20000
+            draw_ellipses: 20000
+            draw_star: 20000
+            draw_checkerboard: 20000
+            draw_stripes: 20000
+            draw_cube: 20000
+            gaussian_noise: 20000

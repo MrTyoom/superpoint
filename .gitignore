@@ -1,0 +1,10 @@
+__pycache__
+
+old_src
+logs
+tests/test_dataloader.py
+checkpoints
+.ruff_cache
+.mypy_cache
+.DS_Store
+.venv

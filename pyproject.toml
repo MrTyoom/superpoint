@@ -1,23 +1,63 @@
 [project]
 name = "superpoint"
-version = "0.0.1"
+version = "0.1.0"
 description = ""
 readme = "README.md"
-
+requires-python = ">=3.11"
+dependencies = [
+    "numpy==1.26.4",
+    "dvc>=3.66.1",
+    "flake8-pyproject>=1.2.4",
+    "imgaug>=0.4.0",
+    "isort>=7.0.0",
+    "joblib>=1.5.3",
+    "lightning>=2.6.1",
+    "omegaconf>=2.3.0",
+    "pre-commit>=4.5.1",
+    "rootutils>=1.0.7",
+    "ruff>=0.15.0",
+    "torch>=2.9.1",
+    "torchvision>=0.24.1",
+    "wemake-python-styleguide>=1.5.0",
+]
 
 [tool.ruff]
-target-version = "py310"
+# Включаем стандартные правила (Pyflakes, pycodestyle)
+select = ["E", "F", "W", "C90", "I"]
+# Игнорируем правила, которые будут перекрываться проверками WPS
+ignore = ["E402"]
+target-version = "py311"
 line-length = 120
 indent-width = 4
 output-format = "full"
 show-fixes = true
 exclude = [
-  "data",
+    "scripts/*.py",
 ]
 
+[tool.flake8]
+exclude = [
+    "scripts/*.py",
+]
+# Оставляем только правила WPS, так как остальное проверит Ruff
+select = "WPS"
+# Настройка специфичных для WPS параметров
+max-line-length = 120
+show-source = true
+ignore = ["WPS111", "WPS420"]
+per-file-ignores = "tests/*: WPS218, WPS301, WPS210, WPS478, src/*: WPS478, WPS210, WPS432"
+max-methods = 10
+max-line-complexity = 20
+max-module-members = 10
 
-[tool.ruff.lint]
-extend-select = ["I"]
-ignore = ["E402"]
-preview = true
-explicit-preview-rules = true
+[tool.isort]
+profile = "wemake"
+line_length = 120
+src_paths = ["src"]
+
+[tool.mypy]
+exclude = [
+    "^.venv/",       
+    "^scripts/",  
+]
+explicit_package_bases = true

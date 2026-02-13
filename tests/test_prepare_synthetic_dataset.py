@@ -1,3 +1,5 @@
+from types import MappingProxyType
+
 import cv2
 import numpy as np
 import pytest
@@ -6,7 +8,7 @@ from omegaconf import OmegaConf
 
 rootutils.setup_root(__file__, indicator="src", pythonpath=True)
 
-from src.prepare_synthetic_dataset import (
+from scripts.prepare_synthetic_dataset import (
     draw_checkerboard,
     draw_cube,
     draw_lines,
@@ -16,7 +18,8 @@ from src.prepare_synthetic_dataset import (
     draw_stripes,
     generate_data,
 )
-from src.utils.utils import make_dir
+
+from src.common import make_dir
 
 
 @pytest.fixture(scope="package")
@@ -26,15 +29,17 @@ def init_tests():
     return cfg, temp_dir
 
 
-DRAW_FUNCTIONS = {
-    "lines": (draw_lines, 0),
-    "polygon": (draw_polygon, 1),
-    "multiple_polygons": (draw_multiple_polygons, 2),
-    "star": (draw_star, 3),
-    "checkerboard": (draw_checkerboard, 4),
-    "stripes": (draw_stripes, 5),
-    "cube": (draw_cube, 6),
-}
+DRAW_FUNCTIONS = MappingProxyType(
+    {
+        "lines": (draw_lines, 0),
+        "polygon": (draw_polygon, 1),
+        "multiple_polygons": (draw_multiple_polygons, 2),
+        "star": (draw_star, 3),
+        "checkerboard": (draw_checkerboard, 4),
+        "stripes": (draw_stripes, 5),
+        "cube": (draw_cube, 6),
+    }
+)
 
 
 @pytest.mark.parametrize(
