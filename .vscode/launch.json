@@ -1,0 +1,22 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+
+        {
+            "name": "prepare_synthetic_data",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "scripts/prepare_synthetic_data.py",
+            "console": "integratedTerminal",
+            "justMyCode": false
+        },
+        {
+            "name": "train_magicpoint",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "src/train_magicpoint.py",
+            "console": "integratedTerminal",
+            "justMyCode": false
+        }
+    ]
+}
