@@ -25,7 +25,7 @@ from utils.loader import dataLoader, modelLoader, pretrainedLoader
 from utils.loader import get_save_path
 from utils.loader import get_module
     
-from utils.logging import *
+from src.utils.custom_logging import *
 
 ###### util functions ######
 def datasize(train_loader, config, tag='train'):

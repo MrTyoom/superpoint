@@ -10,7 +10,7 @@ from omegaconf import OmegaConf
 
 rootutils.setup_root(__file__, indicator="src", pythonpath=True)
 
-from src.utils import make_dir
+from utils.utils import make_dir
 
 # Color functions
 
@@ -802,10 +802,10 @@ def generate_background(
     background_size,
     random_state,
     nb_blobs=100,
-    min_rad_ratio=0.01,
-    max_rad_ratio=0.05,
-    min_kernel_size=50,
-    max_kernel_size=300,
+    min_rad_ratio=0.02,
+    max_rad_ratio=0.031,
+    min_kernel_size=150,
+    max_kernel_size=500,
 ):
     """Generate a customized background image(more contrast and sharp)
     Parameters:

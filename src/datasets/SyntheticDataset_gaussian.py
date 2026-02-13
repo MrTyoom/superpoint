@@ -39,47 +39,45 @@ def load_as_float(path):
 
 
 class SyntheticDataset_gaussian(data.Dataset):
-    """ """
-
-    default_config = {
-        "primitives": "all",
-        "truncate": {},
-        "validation_size": -1,
-        "test_size": -1,
-        "on-the-fly": False,
-        "cache_in_memory": False,
-        "suffix": None,
-        "add_augmentation_to_test_set": False,
-        "num_parallel_calls": 10,
-        "generation": {
-            "split_sizes": {"training": 10000, "validation": 200, "test": 500},
-            "image_size": [960, 1280],
-            "random_seed": 0,
-            "params": {
-                "generate_background": {
-                    "min_kernel_size": 150,
-                    "max_kernel_size": 500,
-                    "min_rad_ratio": 0.02,
-                    "max_rad_ratio": 0.031,
-                },
-                "draw_stripes": {"transform_params": (0.1, 0.1)},
-                "draw_multiple_polygons": {"kernel_boundaries": (50, 100)},
-            },
-        },
-        "preprocessing": {
-            "resize": [240, 320],
-            "blur_size": 11,
-        },
-        "augmentation": {
-            "photometric": {
-                "enable": False,
-                "primitives": "all",
-                "params": {},
-                "random_order": True,
-            },
-            "homographic": {"enable": False, "params": {}, "valid_border_margin": 0},
-        },
-    }
+    # default_config = {
+    #     "primitives": "all",
+    #     "truncate": {},
+    #     "validation_size": -1,
+    #     "test_size": -1,
+    #     "on-the-fly": False,
+    #     "cache_in_memory": False,
+    #     "suffix": None,
+    #     "add_augmentation_to_test_set": False,
+    #     "num_parallel_calls": 10,
+    #     "generation": {
+    #         "split_sizes": {"training": 10000, "validation": 200, "test": 500},
+    #         "image_size": [960, 1280],
+    #         "random_seed": 0,
+    #         "params": {
+    #             "generate_background": {
+    #                 "min_kernel_size": 150,
+    #                 "max_kernel_size": 500,
+    #                 "min_rad_ratio": 0.02,
+    #                 "max_rad_ratio": 0.031,
+    #             },
+    #             "draw_stripes": {"transform_params": (0.1, 0.1)},
+    #             "draw_multiple_polygons": {"kernel_boundaries": (50, 100)},
+    #         },
+    #     },
+    #     "preprocessing": {
+    #         "resize": [240, 320],
+    #         "blur_size": 11,
+    #     },
+    #     "augmentation": {
+    #         "photometric": {
+    #             "enable": False,
+    #             "primitives": "all",
+    #             "params": {},
+    #             "random_order": True,
+    #         },
+    #         "homographic": {"enable": False, "params": {}, "valid_border_margin": 0},
+    #     },
+    # }
 
 
     if debug:
@@ -172,9 +170,11 @@ class SyntheticDataset_gaussian(data.Dataset):
         random.seed(seed)
 
         # Update config
-        self.config = self.default_config
-        self.config = dict_update(self.config, dict(config))
+        # self.config = self.default_config
+        # self.config = dict_update(self.config, dict(config))
+        self.config = dict(config['synth_dataset_gaussian'])
 
+        
         self.transform = transform
         self.sample_homography = sample_homography
         self.compute_valid_mask = compute_valid_mask
@@ -198,17 +198,15 @@ class SyntheticDataset_gaussian(data.Dataset):
 
         self.gaussian_label = False
         if self.config["gaussian_label"]["enable"]:
-            # self.params_transform = {'crop_size_y': 120, 'crop_size_x': 160, 'stride': 1, 'sigma': self.config['gaussian_label']['sigma']}
             self.gaussian_label = True
 
-        # self.pool = multiprocessing.Pool(6)      # Пацаны просто не доделали мультипроцессинг, то эта строка просто ломает
-
+       
         # Parse drawing primitives
-        primitives = self.parse_primitives(config["primitives"], self.drawing_primitives)
+        primitives = self.parse_primitives(self.config["primitives"], self.drawing_primitives)
 
         basepath = Path(
             DATA_PATH,
-            "synthetic_shapes" + ("_{}".format(config["suffix"]) if config["suffix"] is not None else ""),
+            "synthetic_shapes" + ("_{}".format(self.config["suffix"]) if self.config["suffix"] is not None else ""),
         )
         basepath.mkdir(parents=True, exist_ok=True)
 
@@ -245,15 +243,6 @@ class SyntheticDataset_gaussian(data.Dataset):
 
         self.crawl_folders(splits)
 
-    # Строки кода, если все-таки хотим pool оставить
-    # def __getstate__(self):
-    #     self_dict = self.__dict__.copy()
-    #     del self_dict['pool']
-    #     return self_dict
-
-    # def __setstate__(self, state):
-    #     self.__dict__.update(state)
-
     def crawl_folders(self, splits):
         sequence_set = []
         for img, pnts in zip(splits[self.action]["images"], splits[self.action]["points"]):
@@ -261,45 +250,6 @@ class SyntheticDataset_gaussian(data.Dataset):
             sequence_set.append(sample)
         self.samples = sequence_set
 
-    # def putGaussianMaps_par(self, center):
-    #     crop_size_y = self.params_transform['crop_size_y']
-    #     crop_size_x = self.params_transform['crop_size_x']
-    #     stride = self.params_transform['stride']
-    #     sigma = self.params_transform['sigma']
-
-    #     grid_y = crop_size_y / stride
-    #     grid_x = crop_size_x / stride
-    #     start = stride / 2.0 - 0.5
-    #     xx, yy = np.meshgrid(range(int(grid_x)), range(int(grid_y)))
-    #     xx = xx * stride + start
-    #     yy = yy * stride + start
-    #     d2 = (xx - center[0]) ** 2 + (yy - center[1]) ** 2
-    #     exponent = d2 / 2.0 / sigma / sigma
-    #     mask = exponent <= sigma
-    #     cofid_map = np.exp(-exponent)
-    #     cofid_map = np.multiply(mask, cofid_map)
-    #     return cofid_map
-
-    def putGaussianMaps(self, center, accumulate_confid_map):
-        crop_size_y = self.params_transform["crop_size_y"]
-        crop_size_x = self.params_transform["crop_size_x"]
-        stride = self.params_transform["stride"]
-        sigma = self.params_transform["sigma"]
-
-        grid_y = crop_size_y / stride
-        grid_x = crop_size_x / stride
-        start = stride / 2.0 - 0.5
-        xx, yy = np.meshgrid(range(int(grid_x)), range(int(grid_y)))
-        xx = xx * stride + start
-        yy = yy * stride + start
-        d2 = (xx - center[0]) ** 2 + (yy - center[1]) ** 2
-        exponent = d2 / 2.0 / sigma / sigma
-        mask = exponent <= sigma
-        cofid_map = np.exp(-exponent)
-        cofid_map = np.multiply(mask, cofid_map)
-        accumulate_confid_map += cofid_map
-        accumulate_confid_map[accumulate_confid_map > 1.0] = 1.0
-        return accumulate_confid_map
 
     def __getitem__(self, index):
         """
@@ -510,35 +460,7 @@ class SyntheticDataset_gaussian(data.Dataset):
             sample.update({"warped_valid_mask": valid_mask})
             sample.update({"homographies": homography, "inv_homographies": inv_homography})
 
-        # labels = self.labels2Dto3D(self.cell_size, labels)
-        # labels = torch.from_numpy(labels[np.newaxis,:,:])
-        # input.update({'labels': labels})
-
-        ### code for warped image
-
-        # if self.config['gaussian_label']['enable']:
-        #     heatmaps = np.zeros((H, W))
-        #     # for center in pnts_int.numpy():
-        #     for center in pnts[:, [1, 0]].numpy():
-        #         # print("put points: ", center)
-        #         heatmaps = self.putGaussianMaps(center, heatmaps)
-        #     # import matplotlib.pyplot as plt
-        #     # plt.figure(figsize=(5, 10))
-        #     # plt.subplot(211)
-        #     # plt.imshow(heatmaps)
-        #     # plt.colorbar()
-        #     # plt.subplot(212)
-        #     # plt.imshow(np.squeeze(warped_labels.numpy()))
-        #     # plt.show()
-        #     # import time
-        #     # time.sleep(500)
-        #     # results = self.pool.map(self.putGaussianMaps_par, warped_pnts.numpy())
-
-        #     warped_labels_gaussian = torch.from_numpy(heatmaps).view(-1, H, W)
-        #     warped_labels_gaussian[warped_labels_gaussian>1.] = 1.
-
-        #     sample['labels_2D_gaussian'] = warped_labels_gaussian
-
+    
         if self.getPts:
             sample.update({"pts": pnts})
 
