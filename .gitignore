@@ -1,9 +1,6 @@
 __pycache__
 
-old_src
-logs
-tests/test_dataloader.py
-checkpoints
+tmp
 .ruff_cache
 .mypy_cache
 .DS_Store

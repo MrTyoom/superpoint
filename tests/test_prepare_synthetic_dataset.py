@@ -4,11 +4,13 @@ import cv2
 import numpy as np
 import pytest
 import rootutils
+from joblib import Parallel
 from omegaconf import OmegaConf
 
+# isort: off
 rootutils.setup_root(__file__, indicator="src", pythonpath=True)
 
-from scripts.prepare_synthetic_dataset import (
+from scripts.prepare_synthetic_data import (
     draw_checkerboard,
     draw_cube,
     draw_lines,
@@ -19,12 +21,13 @@ from scripts.prepare_synthetic_dataset import (
     generate_data,
 )
 
+# isort: on
 from src.common import make_dir
 
 
 @pytest.fixture(scope="package")
 def init_tests():
-    cfg = OmegaConf.load("params.yaml")["prepare_synthetic_dataset"]
+    cfg = OmegaConf.load("params.yaml")["prepare_synthetic_data"]
     temp_dir = make_dir("./tmp")
     return cfg, temp_dir
 
@@ -49,15 +52,8 @@ DRAW_FUNCTIONS = MappingProxyType(
 def test_draw_function(capsys, init_tests, draw_func_name, draw_func, image_id):
     cfg, temp_dir = init_tests
 
-    image_file, points_file = generate_data(
-        image_id,
-        temp_dir,
-        draw_func,
-        cfg.background_size,
-        cfg.image_size,
-        cfg.blur_size,
-        cfg.seed,
-    )
+    delayed_data = generate_data(image_id, temp_dir, draw_func, cfg.background_size, cfg.image_size, cfg.blur_size)
+    image_file, points_file = Parallel(n_jobs=1)([delayed_data])[0]
 
     image = cv2.imread(image_file, cv2.IMREAD_GRAYSCALE)
     H, W = image.shape
@@ -67,7 +63,7 @@ def test_draw_function(capsys, init_tests, draw_func_name, draw_func, image_id):
     points = np.load(points_file)
     num_points, dim = points.shape
 
-    assert num_points > 0
+    assert num_points > 0, f"image_file: {image_file}"
     assert dim == 2
 
     x = points[:, 0]

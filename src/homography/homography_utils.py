@@ -3,11 +3,12 @@
 import cv2
 import numpy as np
 import torch
-from apply import inv_warp_image_batch
-from generation import get_corners
 from numpy.typing import NDArray
 from omegaconf import DictConfig
-from transforms import perspective_transform
+
+from src.homography.apply import inv_warp_image_batch
+from src.homography.generation import get_corners
+from src.homography.transforms import perspective_transform
 
 
 def sample_homography(cfg: DictConfig, shape: NDArray, shift: int) -> NDArray:

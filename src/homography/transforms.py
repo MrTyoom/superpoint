@@ -1,11 +1,12 @@
 """Функции для масштабирования, трансляции и поворота при генерации гомографий"""
 
 import numpy as np
-from generation import add_perspective
 from numpy.random import randint, uniform
 from numpy.typing import NDArray
 from omegaconf import DictConfig
 from scipy.stats import truncnorm
+
+from src.homography.generation import add_perspective
 
 
 def calc_scales_and_center(cfg, pts: NDArray, std_trunc: int = 2) -> tuple[NDArray, NDArray]:

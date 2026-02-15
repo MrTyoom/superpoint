@@ -2,26 +2,15 @@ from pathlib import Path
 
 import cv2
 import numpy as np
-import rootutils
 import torch
 from lightning import LightningDataModule
 from omegaconf import DictConfig
 from torch.utils.data import DataLoader, Dataset
 from torchvision.transforms import ToTensor
 
-from homography.apply import filter_points, homography_scaling_torch, inv_warp_image, warp_points
-from homography.utils import compute_valid_mask, sample_homography
 from src.augmentation import PhotometricAugmentation
-
-root = rootutils.setup_root(__file__, indicator="src", pythonpath=True)
-
-SEED_BITS = 32
-WORKER_SEED_MODULUS = 1 << SEED_BITS
-
-
-def worker_init_fn(worker_id):
-    worker_seed = torch.initial_seed() % WORKER_SEED_MODULUS + worker_id
-    np.random.seed(worker_seed)
+from src.homography.apply import filter_points, homography_scaling_torch, inv_warp_image, warp_points
+from src.homography.homography_utils import compute_valid_mask, sample_homography
 
 
 def get_labels(pnts, H, W, device=None):
@@ -124,7 +113,7 @@ class DataSet(Dataset):
                 erosion_radius=self.aug_cfg.homographic.valid_border_margin,
             ).to(self.device)
 
-        labels_two_dim = self.get_labels(warped_pts, H, W, device=self.device)
+        labels_two_dim = get_labels(warped_pts, H, W, device=self.device)
         warped_labels_res = self.get_label_res(H, W, warped_pts, device=self.device)
 
         if img_tensor.dim() == 2:
@@ -140,7 +129,7 @@ class DataSet(Dataset):
         warped_img_tensor = warped_img_tensor.to(self.device)
 
         sample = (img_tensor, labels_two_dim, valid_mask, warped_img_tensor, warped_labels_res, homography)
-        # [1, 240, 320]
+        # [1, 120, 160]
 
         return sample
 
@@ -162,19 +151,18 @@ class Loader(LightningDataModule):
         cfg = self.hparams.cfg
         return DataLoader(
             dataset=self.train_dataset,
-            batch_size=cfg.batch_size,
+            batch_size=cfg.train_batch_size,
             num_workers=cfg.num_workers,
             generator=self.generator,
             drop_last=True,
             pin_memory=torch.cuda.is_available(),
-            worker_init_fn=worker_init_fn,
         )
 
     def val_dataloader(self) -> DataLoader:
         cfg = self.hparams.cfg
         return DataLoader(
             dataset=self.val_dataset,
-            batch_size=cfg.eval_batch_size,
+            batch_size=cfg.val_batch_size,
             num_workers=cfg.num_workers,
             shuffle=False,
             pin_memory=torch.cuda.is_available(),
@@ -192,7 +180,7 @@ class Loader(LightningDataModule):
     def split_files(self):
         cfg = self.hparams.cfg
 
-        files = Path(root / cfg.data_dir).glob("**/*.png")
+        files = Path(cfg.data_dir).glob("**/*.png")
         files = [f for f in files if f.with_suffix(".npy").exists()]
 
         rng = np.random.RandomState(cfg.seed)
