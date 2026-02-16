@@ -41,9 +41,9 @@ def get_ellipse_axes(dim: int) -> TupleInt:
 
 def get_ellipse_center(img_shape: TupleInt, axes: TupleInt) -> TupleInt:
     max_rad = max(axes)
-    x = randint(max_rad, img_shape[1] - max_rad)
-    y = randint(max_rad, img_shape[0] - max_rad)
-    return TupleInt((x, y))
+    x_cord = randint(max_rad, img_shape[1] - max_rad)
+    y_cord = randint(max_rad, img_shape[0] - max_rad)
+    return TupleInt((x_cord, y_cord))
 
 
 def blur_mask(kernel_size_range, mask):

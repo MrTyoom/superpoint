@@ -1,4 +1,5 @@
 from pathlib import Path
+from typing import List, Tuple
 
 import cv2
 import numpy as np
@@ -13,122 +14,81 @@ from src.homography.apply import filter_points, homography_scaling_torch, inv_wa
 from src.homography.homography_utils import compute_valid_mask, sample_homography
 
 
-def get_labels(pnts, H, W, device=None):
-    labels = torch.zeros(H, W, device=device)
-    pnts_round = pnts.round().long().to(device)
+def get_labels(pnts: torch.Tensor, height: int, width: int) -> torch.Tensor:
+    labels = torch.zeros(height, width)
+    pnts_round = pnts.round().long()
 
-    max_coord_tensor = torch.tensor([[W - 1, H - 1]], device=device).long()
+    max_coord_tensor = torch.tensor([[width - 1, height - 1]]).long()
 
     pnts_int = torch.min(pnts_round, max_coord_tensor)
 
     indices = (pnts_int[:, 1], pnts_int[:, 0])
-    labels = labels.index_put_(indices, torch.ones(len(pnts_int), device=device))
+    labels = labels.index_put_(indices, torch.ones(len(pnts_int)))
     return labels
 
 
 class DataSet(Dataset):
-    def __init__(self, files: list[Path], aug_cfg: DictConfig | None = None, device: torch.device = None):
+    def __init__(self, files: list[Path], aug_cfg: DictConfig, mode: str = "train") -> None:
         super().__init__()
 
         self.image_files = files
-        self.annot_files = [f.with_suffix(".npy") for f in files]
+        self.annot_files = [cur_file.with_suffix(".npy") for cur_file in files]
 
+        self.mode = mode
         self.aug_cfg = aug_cfg
-        self.device = "cpu"
         self.transform = ToTensor()
 
-    def get_label_res(self, H, W, pnts, device=None):
-        """Создание карты субпиксельных смещений"""
-        pnts = pnts.to(device)
-        labels_res = torch.zeros(2, H, W, device=device)  # (2, H, W)
-
-        pnts_int = pnts.round().long()
-        max_coords = torch.tensor([W - 1, H - 1], device=device).long()
-        pnts_int = torch.min(pnts_int, max_coords)
-
-        offsets = pnts - pnts.round()  # (N, 2)
-        y_indices = pnts_int[:, 1]
-        x_indices = pnts_int[:, 0]
-
-        # Первый канал (dx)
-        labels_res[0].index_put_(
-            (y_indices, x_indices),
-            offsets[:, 0],  # dx
-        )
-
-        # Второй канал (dy)
-        labels_res[1].index_put_(
-            (y_indices, x_indices),
-            offsets[:, 1],  # dy
-        )
-        return labels_res  # (2, H, W)
-
-    def __len__(self):
+    def __len__(self) -> int:
         return len(self.image_files)
 
-    def __getitem__(self, index):
+    def __getitem__(self, index: int) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         src_image = cv2.imread(self.image_files[index], cv2.IMREAD_GRAYSCALE)
-        src_points = np.load(self.annot_files[index])  # x, y
+        src_points = np.load(self.annot_files[index])
 
-        H, W = src_image.shape
+        height, width = src_image.shape
 
-        if self.aug_cfg is None:
-            # validation == without augmentation
-            homography = torch.eye(3)
-            inv_homography = homography.clone()
-
-        else:
-            # train
+        if self.mode == "train":
             aug = PhotometricAugmentation(self.aug_cfg.photometric)
             src_image = aug(src_image)
 
-            inv_homography = sample_homography(self.aug_cfg.homographic, np.array([2, 2]), shift=-1)  # H_inv
+            homography, inv_homography = sample_homography(self.aug_cfg.homographic, np.array([2, 2]), shift=-1)
+            homography = torch.tensor(homography).float()
             inv_homography = torch.tensor(inv_homography).float()
 
-            homography = np.linalg.inv(inv_homography)  # H
-            homography = torch.tensor(homography).float()
+        else:
+            homography = torch.eye(3)
+            inv_homography = torch.eye(3)
 
-        img_tensor = torch.from_numpy(src_image).float()
+        images = torch.from_numpy(src_image).float()
 
-        warped_img = inv_warp_image(img_tensor.squeeze(), inv_homography, mode="bilinear")
+        warped_img = inv_warp_image(images.squeeze(), inv_homography, mode="bilinear")
         warped_img = warped_img.squeeze().numpy()
         warped_img = warped_img[:, :, np.newaxis]
 
-        homography_scaled = homography_scaling_torch(homography, H, W)
+        homography_scaled = homography_scaling_torch(homography, height, width)
 
         pts_tensor = torch.from_numpy(src_points).float()
         warped_pts = warp_points(pts_tensor, homography_scaled)
 
-        warped_pts = filter_points(warped_pts, torch.tensor([W, H]))
+        warped_pts = filter_points(warped_pts, torch.tensor([width, height]))
 
         warped_img = self.transform(warped_img)
 
-        if self.aug_cfg is None:
-            valid_mask = torch.ones(H, W).to(self.device)
+        if self.mode == "val":
+            masks = torch.ones(height, width)
         else:
-            valid_mask = compute_valid_mask(
-                torch.tensor([H, W]),
+            masks = compute_valid_mask(
+                torch.tensor([height, width]),
                 inv_homography=inv_homography,
-                device=self.device,
                 erosion_radius=self.aug_cfg.homographic.valid_border_margin,
-            ).to(self.device)
+            )
 
-        labels_two_dim = get_labels(warped_pts, H, W, device=self.device)
-        warped_labels_res = self.get_label_res(H, W, warped_pts, device=self.device)
+        labels = get_labels(warped_pts, height, width)
 
-        if img_tensor.dim() == 2:
-            img_tensor = img_tensor.unsqueeze(0)
+        if images.dim() == 2:
+            images = images.unsqueeze(0)
 
-        img_tensor = img_tensor.to(self.device)
-
-        warped_img_tensor = warped_img.clone()
-        if warped_img_tensor.dim() == 2:
-            warped_img_tensor = warped_img_tensor.unsqueeze(0)
-        elif warped_img_tensor.dim() == 3 and warped_img_tensor.shape[2] == 1:
-            warped_img_tensor = warped_img_tensor.permute(2, 0, 1)
-        warped_img_tensor = warped_img_tensor.to(self.device)
-
-        sample = (img_tensor, labels_two_dim, valid_mask, warped_img_tensor, warped_labels_res, homography)
+        sample = (images, masks, labels)
         # [1, 120, 160]
 
         return sample
@@ -142,7 +102,6 @@ class Loader(LightningDataModule):
         self.val_dataset: Dataset | None = None
 
         self.save_hyperparameters(logger=False)
-        self.device = "cpu"
 
         self.generator = torch.Generator("cpu")
         self.generator.manual_seed(self.hparams.cfg.seed)
@@ -174,14 +133,14 @@ class Loader(LightningDataModule):
 
             aug_cfg = self.hparams.cfg.augmentation
 
-            self.train_dataset = DataSet(train_files, aug_cfg, self.device)
-            self.val_dataset = DataSet(val_files, None, device=self.device)
+            self.train_dataset = DataSet(train_files, aug_cfg, "train")
+            self.val_dataset = DataSet(val_files, aug_cfg, "val")
 
-    def split_files(self):
+    def split_files(self) -> Tuple[List[Path], List[Path]]:
         cfg = self.hparams.cfg
 
-        files = Path(cfg.data_dir).glob("**/*.png")
-        files = [f for f in files if f.with_suffix(".npy").exists()]
+        files = list(Path(cfg.data_dir).glob("**/*.png"))
+        files = [cur_file for cur_file in files if cur_file.with_suffix(".npy").exists()]
 
         rng = np.random.RandomState(cfg.seed)
         rng.shuffle(files)

@@ -45,7 +45,7 @@ select = "WPS"
 # Настройка специфичных для WPS параметров
 max-line-length = 120
 show-source = true
-ignore = ["WPS111", "WPS420"]
+ignore = ["WPS420"]
 per-file-ignores = "tests/*: WPS218, WPS301, WPS210, WPS478, src/*: WPS478, WPS210, WPS432"
 max-methods = 10
 max-line-complexity = 20

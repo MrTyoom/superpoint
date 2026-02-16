@@ -1,11 +1,14 @@
+from pathlib import Path
 from types import MappingProxyType
+from typing import Any, Callable, Tuple
 
 import cv2
 import numpy as np
 import pytest
 import rootutils
+from _pytest.capture import CaptureFixture
 from joblib import Parallel
-from omegaconf import OmegaConf
+from omegaconf import DictConfig, OmegaConf
 
 # isort: off
 rootutils.setup_root(__file__, indicator="src", pythonpath=True)
@@ -26,7 +29,7 @@ from src.common import make_dir
 
 
 @pytest.fixture(scope="package")
-def init_tests():
+def init_tests() -> Tuple[DictConfig, Path]:
     cfg = OmegaConf.load("params.yaml")["prepare_synthetic_data"]
     temp_dir = make_dir("./tmp")
     return cfg, temp_dir
@@ -49,16 +52,22 @@ DRAW_FUNCTIONS = MappingProxyType(
     "draw_func_name,draw_func,image_id",
     [(name, func, idx) for name, (func, idx) in DRAW_FUNCTIONS.items()],
 )
-def test_draw_function(capsys, init_tests, draw_func_name, draw_func, image_id):
+def test_draw_function(
+    capsys: CaptureFixture[str],
+    init_tests: Tuple[DictConfig, Path],
+    draw_func_name: str,
+    draw_func: Callable[..., Any],
+    image_id: int,
+) -> None:
     cfg, temp_dir = init_tests
 
     delayed_data = generate_data(image_id, temp_dir, draw_func, cfg.background_size, cfg.image_size, cfg.blur_size)
     image_file, points_file = Parallel(n_jobs=1)([delayed_data])[0]
 
     image = cv2.imread(image_file, cv2.IMREAD_GRAYSCALE)
-    H, W = image.shape
+    height, width = image.shape
 
-    assert (H, W) == cfg.image_size
+    assert (height, width) == cfg.image_size
 
     points = np.load(points_file)
     num_points, dim = points.shape
@@ -66,14 +75,14 @@ def test_draw_function(capsys, init_tests, draw_func_name, draw_func, image_id):
     assert num_points > 0, f"image_file: {image_file}"
     assert dim == 2
 
-    x = points[:, 0]
-    y = points[:, 1]
-    ok = (0 <= x) * (x < W) * (0 <= y) * (y < H)
+    x_cord = points[:, 0]
+    y_cord = points[:, 1]
+    ok = (0 <= x_cord) * (x_cord < width) * (0 <= y_cord) * (y_cord < height)
 
     assert ok.all(), f"Points outside bounds for {draw_func_name}"
 
     image_color = cv2.cvtColor(image, cv2.COLOR_GRAY2BGR)
-    for x, y in points:
-        cv2.circle(image_color, (int(x), int(y)), 3, (255, 0, 255), -1)
+    for x_cord, y_cord in points:
+        cv2.circle(image_color, (int(x_cord), int(y_cord)), 3, (255, 0, 255), -1)
 
     cv2.imwrite(image_file, image_color)

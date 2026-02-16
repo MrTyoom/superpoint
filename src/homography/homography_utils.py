@@ -1,5 +1,7 @@
 """Утилиты для работы с гомографиями"""
 
+from typing import List, Tuple, Union
+
 import cv2
 import numpy as np
 import torch
@@ -11,7 +13,7 @@ from src.homography.generation import get_corners
 from src.homography.transforms import perspective_transform
 
 
-def sample_homography(cfg: DictConfig, shape: NDArray, shift: int) -> NDArray:
+def sample_homography(cfg: DictConfig, shape: NDArray, shift: int) -> Tuple[NDArray, NDArray]:
     """
     Генерирует случайную гомографию
     """
@@ -21,13 +23,17 @@ def sample_homography(cfg: DictConfig, shape: NDArray, shift: int) -> NDArray:
     pts1 *= shape[np.newaxis]
     pts2 *= shape[np.newaxis]
 
-    homography = cv2.getPerspectiveTransform(np.float32(pts1 + shift), np.float32(pts2 + shift))
-    homography = np.linalg.inv(homography)
+    inv_homography = cv2.getPerspectiveTransform(np.float32(pts1 + shift), np.float32(pts2 + shift))
+    homography = np.linalg.inv(inv_homography)
+    return homography, inv_homography
 
-    return homography
 
-
-def compute_valid_mask(image_shape, inv_homography, device="cpu", erosion_radius=0):
+def compute_valid_mask(
+    image_shape: Union[torch.Tensor, Tuple[int, int], torch.Size, List[int]],
+    inv_homography: torch.Tensor,
+    device: Union[torch.device, str] = "cpu",
+    erosion_radius: int = 0,
+) -> torch.Tensor:
     """
     Вычисляет маску валидных пикселей после применения гомографии
     """
@@ -42,7 +48,7 @@ def compute_valid_mask(image_shape, inv_homography, device="cpu", erosion_radius
 
     if erosion_radius > 0:
         kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (erosion_radius * 2,) * 2)
-        for i in range(batch_size):
-            mask[i, :, :] = cv2.erode(mask[i, :, :], kernel, iterations=1)
+        for el_ind in range(batch_size):
+            mask[el_ind, :, :] = cv2.erode(mask[el_ind, :, :], kernel, iterations=1)
 
     return torch.tensor(mask).to(device)

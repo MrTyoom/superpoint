@@ -1,10 +1,14 @@
 """Функции для применения гомографий к изображениям и точкам"""
 
+from typing import Tuple, Union
+
 import torch
 from torch.nn.functional import grid_sample
 
 
-def inv_warp_image_batch(img, mat_homo_inv, device="cpu", mode="bilinear"):
+def inv_warp_image_batch(
+    img: torch.Tensor, mat_homo_inv: torch.Tensor, device: Union[torch.device, str] = "cpu", mode: str = "bilinear"
+) -> torch.Tensor:
     """
     Inverse warp images in batch
 
@@ -26,26 +30,28 @@ def inv_warp_image_batch(img, mat_homo_inv, device="cpu", mode="bilinear"):
     if len(mat_homo_inv.shape) == 2:
         mat_homo_inv = mat_homo_inv.view(1, 3, 3)
 
-    Batch, channel, H, W = img.shape
+    batch, _, height, width = img.shape
 
-    vert_space = torch.linspace(-1, 1, W)
-    height_space = torch.linspace(-1, 1, H)
+    vert_space = torch.linspace(-1, 1, width)
+    height_space = torch.linspace(-1, 1, height)
 
     grid = torch.meshgrid(vert_space, height_space, indexing="ij")
     coor_cells = torch.stack(grid, dim=2)
     coor_cells = coor_cells.transpose(0, 1)
-    coor_cells = coor_cells.to(device)
+
     coor_cells = coor_cells.contiguous()
 
     src_pixel_coords = warp_points(coor_cells.view([-1, 2]), mat_homo_inv, device)
-    src_pixel_coords = src_pixel_coords.view([Batch, H, W, 2])
+    src_pixel_coords = src_pixel_coords.view([batch, height, width, 2])
     src_pixel_coords = src_pixel_coords.float()
 
     warped_img = grid_sample(img, src_pixel_coords, mode=mode, align_corners=True)
     return warped_img
 
 
-def inv_warp_image(img, mat_homo_inv, device="cpu", mode="bilinear"):
+def inv_warp_image(
+    img: torch.Tensor, mat_homo_inv: torch.Tensor, device: Union[torch.device, str] = "cpu", mode: str = "bilinear"
+) -> torch.Tensor:
     """
     Inverse warp images in batch
 
@@ -65,7 +71,9 @@ def inv_warp_image(img, mat_homo_inv, device="cpu", mode="bilinear"):
     return warped_img.squeeze()
 
 
-def warp_points(points, homographies, device="cpu"):
+def warp_points(
+    points: torch.Tensor, homographies: torch.Tensor, device: Union[torch.device, str] = "cpu"
+) -> torch.Tensor:
     """
     Warp a list of points with the given homography.
 
@@ -102,9 +110,9 @@ def warp_points(points, homographies, device="cpu"):
     return warped_points[0, :, :] if no_batches else warped_points
 
 
-def homography_scaling_torch(homography, H, W):
-    row1 = torch.tensor([2.0 / W, 0, -1])
-    row2 = torch.tensor([0, 2.0 / H, -1])
+def homography_scaling_torch(homography: torch.Tensor, height: int, width: int) -> torch.Tensor:
+    row1 = torch.tensor([2.0 / width, 0, -1])
+    row2 = torch.tensor([0, 2.0 / height, -1])
     row3 = torch.tensor([0, 0, 1.0])
 
     trans = torch.stack([row1, row2, row3])
@@ -112,8 +120,9 @@ def homography_scaling_torch(homography, H, W):
     return homography
 
 
-def filter_points(points, shape, return_mask=False):
-    ### check!
+def filter_points(
+    points: torch.Tensor, shape: torch.Tensor, return_mask: bool = False
+) -> Union[torch.Tensor, Tuple[torch.Tensor, torch.Tensor]]:
     points = points.float()
     shape = shape.float()
     mask = (points >= 0) * (points <= shape - 1)
