@@ -1,6 +1,6 @@
 from pathlib import Path
 from types import MappingProxyType
-from typing import Any, Callable, Tuple
+from typing import Any, Callable
 
 import cv2
 import numpy as np
@@ -29,7 +29,7 @@ from src.common import make_dir
 
 
 @pytest.fixture(scope="package")
-def init_tests() -> Tuple[DictConfig, Path]:
+def init_tests() -> tuple[DictConfig, Path]:
     cfg = OmegaConf.load("params.yaml")["prepare_synthetic_data"]
     temp_dir = make_dir("./tmp")
     return cfg, temp_dir
@@ -54,7 +54,7 @@ DRAW_FUNCTIONS = MappingProxyType(
 )
 def test_draw_function(
     capsys: CaptureFixture[str],
-    init_tests: Tuple[DictConfig, Path],
+    init_tests: tuple[DictConfig, Path],
     draw_func_name: str,
     draw_func: Callable[..., Any],
     image_id: int,

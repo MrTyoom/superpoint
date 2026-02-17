@@ -40,6 +40,8 @@ exclude = [
 exclude = [
     "scripts/*.py",
 ]
+max-imports = 20
+
 # Оставляем только правила WPS, так как остальное проверит Ruff
 select = "WPS"
 # Настройка специфичных для WPS параметров

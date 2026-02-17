@@ -4,18 +4,18 @@ import torch
 
 matplotlib.use("Agg")
 from pathlib import Path
-from typing import Union
 
 # noqa: WPS301
 import matplotlib.pyplot as plt
 import rootutils
 from numpy.typing import NDArray
 from omegaconf import DictConfig, OmegaConf
+from torch.types import Tensor
 
 root = rootutils.setup_root(__file__, indicator="src", pythonpath=True)
 EPS = 1e-8
 
-from src.synthetic_loader import DataSet
+from src.synthetic_loader import SyntheticDataset
 
 
 @pytest.fixture(scope="module")
@@ -26,17 +26,17 @@ def config() -> DictConfig:
 
 
 @pytest.fixture(scope="module")
-def synthetic_dataset(config: DictConfig) -> DataSet:
+def synthetic_dataset(config: DictConfig) -> SyntheticDataset:
     """Создает датасет для тестов"""
     cfg = config.copy()
 
     data_path = root / cfg["data_dir"]
     files = list(Path(data_path).glob("**/*.png"))
     files = [cur_file for cur_file in files if cur_file.with_suffix(".npy").exists()]
-    return DataSet(files, cfg["augmentation"])
+    return SyntheticDataset(files, cfg["augmentation"])
 
 
-def test_dataset_item_shape(synthetic_dataset: DataSet) -> None:
+def test_dataset_item_shape(synthetic_dataset: SyntheticDataset) -> None:
     """Тестирует форму элементов датасета (3 элементов)"""
     sample = synthetic_dataset[0]
     assert len(sample) == 3, f"Expected 3 items, got {len(sample)}"
@@ -44,7 +44,7 @@ def test_dataset_item_shape(synthetic_dataset: DataSet) -> None:
     valid_mask = sample[1]
     labels_two_dim = sample[2]
 
-    assert all(isinstance(sample_el, torch.Tensor) for sample_el in sample)
+    assert all(isinstance(sample_el, Tensor) for sample_el in sample)
 
     labels_two_dim_squeezed = labels_two_dim.squeeze()
     valid_mask_squeezed = valid_mask.squeeze()
@@ -63,7 +63,7 @@ def test_dataset_item_shape(synthetic_dataset: DataSet) -> None:
     assert (height, width) == tuple(expected_size) or (width, height) == tuple(expected_size)
 
 
-def test_dataloader_works(synthetic_dataset: DataSet) -> None:
+def test_dataloader_works(synthetic_dataset: SyntheticDataset) -> None:
     """Тестирует работу DataLoader с датасетом"""
     dataloader = torch.utils.data.DataLoader(
         synthetic_dataset, batch_size=4, shuffle=True, num_workers=0, drop_last=True
@@ -81,7 +81,7 @@ def test_dataloader_works(synthetic_dataset: DataSet) -> None:
     assert valid_mask_batch.shape[0] == 4
 
 
-def test_keypoints_statistics(synthetic_dataset: DataSet) -> None:
+def test_keypoints_statistics(synthetic_dataset: SyntheticDataset) -> None:
     """Тестирует статистику ключевых точек"""
     sample = synthetic_dataset[0]
     labels_two_dim = sample[1]
@@ -94,7 +94,7 @@ def test_keypoints_statistics(synthetic_dataset: DataSet) -> None:
         assert len(nonzero_indices) == num_keypoints
 
 
-def prepare_tensor(tensor: torch.Tensor) -> torch.Tensor:
+def prepare_tensor(tensor: Tensor) -> Tensor:
     """Подготавливает тензор для визуализации"""
     if tensor.device.type != "cpu":
         tensor = tensor.cpu()
@@ -103,7 +103,7 @@ def prepare_tensor(tensor: torch.Tensor) -> torch.Tensor:
     return tensor
 
 
-def tensor_to_image(tensor: torch.Tensor) -> torch.Tensor:
+def tensor_to_image(tensor: Tensor) -> Tensor:
     """Конвертирует тензор в numpy array для imshow"""
     if tensor.dim() == 2:
         return tensor.numpy()
@@ -124,7 +124,7 @@ def normalize_label(img_np: NDArray) -> NDArray:
     return img_np
 
 
-def save_image_tensor(tensor: torch.Tensor, filename: Union[Path, str], is_label: bool = False) -> bool:
+def save_image_tensor(tensor: Tensor, filename: Path | str, is_label: bool = False) -> bool:
     """Основная функция сохранения"""
     tensor = prepare_tensor(tensor)
     img_np = tensor_to_image(tensor)
@@ -142,7 +142,7 @@ def save_image_tensor(tensor: torch.Tensor, filename: Union[Path, str], is_label
     return True
 
 
-def test_image_saving(tmp_path: Path, synthetic_dataset: DataSet) -> None:
+def test_image_saving(tmp_path: Path, synthetic_dataset: SyntheticDataset) -> None:
     """Тестирует сохранение изображений"""
     output_dir = tmp_path / "test_output"
     output_dir.mkdir()

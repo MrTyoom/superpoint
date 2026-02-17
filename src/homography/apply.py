@@ -1,14 +1,13 @@
 """Функции для применения гомографий к изображениям и точкам"""
 
-from typing import Tuple, Union
-
 import torch
 from torch.nn.functional import grid_sample
+from torch.types import Tensor
 
 
 def inv_warp_image_batch(
-    img: torch.Tensor, mat_homo_inv: torch.Tensor, device: Union[torch.device, str] = "cpu", mode: str = "bilinear"
-) -> torch.Tensor:
+    img: Tensor, mat_homo_inv: Tensor, device: torch.device | str = "cpu", mode: str = "bilinear"
+) -> Tensor:
     """
     Inverse warp images in batch
 
@@ -50,8 +49,8 @@ def inv_warp_image_batch(
 
 
 def inv_warp_image(
-    img: torch.Tensor, mat_homo_inv: torch.Tensor, device: Union[torch.device, str] = "cpu", mode: str = "bilinear"
-) -> torch.Tensor:
+    img: Tensor, mat_homo_inv: Tensor, device: torch.device | str = "cpu", mode: str = "bilinear"
+) -> Tensor:
     """
     Inverse warp images in batch
 
@@ -71,9 +70,7 @@ def inv_warp_image(
     return warped_img.squeeze()
 
 
-def warp_points(
-    points: torch.Tensor, homographies: torch.Tensor, device: Union[torch.device, str] = "cpu"
-) -> torch.Tensor:
+def warp_points(points: Tensor, homographies: Tensor, device: torch.device | str = "cpu") -> Tensor:
     """
     Warp a list of points with the given homography.
 
@@ -110,7 +107,7 @@ def warp_points(
     return warped_points[0, :, :] if no_batches else warped_points
 
 
-def homography_scaling_torch(homography: torch.Tensor, height: int, width: int) -> torch.Tensor:
+def homography_scaling_torch(homography: Tensor, height: int, width: int) -> Tensor:
     row1 = torch.tensor([2.0 / width, 0, -1])
     row2 = torch.tensor([0, 2.0 / height, -1])
     row3 = torch.tensor([0, 0, 1.0])
@@ -120,9 +117,7 @@ def homography_scaling_torch(homography: torch.Tensor, height: int, width: int) 
     return homography
 
 
-def filter_points(
-    points: torch.Tensor, shape: torch.Tensor, return_mask: bool = False
-) -> Union[torch.Tensor, Tuple[torch.Tensor, torch.Tensor]]:
+def filter_points(points: Tensor, shape: Tensor, return_mask: bool = False) -> Tensor | tuple[Tensor, Tensor]:
     points = points.float()
     shape = shape.float()
     mask = (points >= 0) * (points <= shape - 1)

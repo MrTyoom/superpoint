@@ -1,20 +1,19 @@
 from pathlib import Path
-from typing import List, Tuple
 
 import cv2
 import numpy as np
 import torch
 from lightning import LightningDataModule
 from omegaconf import DictConfig
+from torch.types import Tensor
 from torch.utils.data import DataLoader, Dataset
-from torchvision.transforms import ToTensor
 
 from src.augmentation import PhotometricAugmentation
 from src.homography.apply import filter_points, homography_scaling_torch, inv_warp_image, warp_points
 from src.homography.homography_utils import compute_valid_mask, sample_homography
 
 
-def get_labels(pnts: torch.Tensor, height: int, width: int) -> torch.Tensor:
+def get_labels(pnts: Tensor, height: int, width: int) -> Tensor:
     labels = torch.zeros(height, width)
     pnts_round = pnts.round().long()
 
@@ -27,7 +26,7 @@ def get_labels(pnts: torch.Tensor, height: int, width: int) -> torch.Tensor:
     return labels
 
 
-class DataSet(Dataset):
+class SyntheticDataset(Dataset):
     def __init__(self, files: list[Path], aug_cfg: DictConfig, mode: str = "train") -> None:
         super().__init__()
 
@@ -36,12 +35,11 @@ class DataSet(Dataset):
 
         self.mode = mode
         self.aug_cfg = aug_cfg
-        self.transform = ToTensor()
 
     def __len__(self) -> int:
         return len(self.image_files)
 
-    def __getitem__(self, index: int) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    def __getitem__(self, index: int) -> tuple[Tensor, ...]:
         src_image = cv2.imread(self.image_files[index], cv2.IMREAD_GRAYSCALE)
         src_points = np.load(self.annot_files[index])
 
@@ -52,9 +50,6 @@ class DataSet(Dataset):
             src_image = aug(src_image)
 
             homography, inv_homography = sample_homography(self.aug_cfg.homographic, np.array([2, 2]), shift=-1)
-            homography = torch.tensor(homography).float()
-            inv_homography = torch.tensor(inv_homography).float()
-
         else:
             homography = torch.eye(3)
             inv_homography = torch.eye(3)
@@ -62,8 +57,6 @@ class DataSet(Dataset):
         images = torch.from_numpy(src_image).float()
 
         warped_img = inv_warp_image(images.squeeze(), inv_homography, mode="bilinear")
-        warped_img = warped_img.squeeze().numpy()
-        warped_img = warped_img[:, :, np.newaxis]
 
         homography_scaled = homography_scaling_torch(homography, height, width)
 
@@ -71,8 +64,6 @@ class DataSet(Dataset):
         warped_pts = warp_points(pts_tensor, homography_scaled)
 
         warped_pts = filter_points(warped_pts, torch.tensor([width, height]))
-
-        warped_img = self.transform(warped_img)
 
         if self.mode == "val":
             masks = torch.ones(height, width)
@@ -85,11 +76,7 @@ class DataSet(Dataset):
 
         labels = get_labels(warped_pts, height, width)
 
-        if images.dim() == 2:
-            images = images.unsqueeze(0)
-
-        sample = (images, masks, labels)
-        # [1, 120, 160]
+        sample = (warped_img, masks, labels)
 
         return sample
 
@@ -103,16 +90,12 @@ class Loader(LightningDataModule):
 
         self.save_hyperparameters(logger=False)
 
-        self.generator = torch.Generator("cpu")
-        self.generator.manual_seed(self.hparams.cfg.seed)
-
     def train_dataloader(self) -> DataLoader:
         cfg = self.hparams.cfg
         return DataLoader(
             dataset=self.train_dataset,
             batch_size=cfg.train_batch_size,
             num_workers=cfg.num_workers,
-            generator=self.generator,
             drop_last=True,
             pin_memory=torch.cuda.is_available(),
         )
@@ -133,10 +116,10 @@ class Loader(LightningDataModule):
 
             aug_cfg = self.hparams.cfg.augmentation
 
-            self.train_dataset = DataSet(train_files, aug_cfg, "train")
-            self.val_dataset = DataSet(val_files, aug_cfg, "val")
+            self.train_dataset = SyntheticDataset(train_files, aug_cfg, "train")
+            self.val_dataset = SyntheticDataset(val_files, aug_cfg, "val")
 
-    def split_files(self) -> Tuple[List[Path], List[Path]]:
+    def split_files(self) -> tuple[list[Path], list[Path]]:
         cfg = self.hparams.cfg
 
         files = list(Path(cfg.data_dir).glob("**/*.png"))

@@ -1,19 +1,18 @@
 """Утилиты для работы с гомографиями"""
 
-from typing import List, Tuple, Union
-
 import cv2
 import numpy as np
 import torch
 from numpy.typing import NDArray
 from omegaconf import DictConfig
+from torch.types import Tensor
 
 from src.homography.apply import inv_warp_image_batch
 from src.homography.generation import get_corners
 from src.homography.transforms import perspective_transform
 
 
-def sample_homography(cfg: DictConfig, shape: NDArray, shift: int) -> Tuple[NDArray, NDArray]:
+def sample_homography(cfg: DictConfig, shape: NDArray, shift: int) -> tuple[Tensor, Tensor]:
     """
     Генерирует случайную гомографию
     """
@@ -25,15 +24,18 @@ def sample_homography(cfg: DictConfig, shape: NDArray, shift: int) -> Tuple[NDAr
 
     inv_homography = cv2.getPerspectiveTransform(np.float32(pts1 + shift), np.float32(pts2 + shift))
     homography = np.linalg.inv(inv_homography)
+
+    homography = torch.tensor(homography).float()
+    inv_homography = torch.tensor(inv_homography).float()
     return homography, inv_homography
 
 
 def compute_valid_mask(
-    image_shape: Union[torch.Tensor, Tuple[int, int], torch.Size, List[int]],
-    inv_homography: torch.Tensor,
-    device: Union[torch.device, str] = "cpu",
+    image_shape: Tensor | tuple[int, int] | torch.Size | list[int],
+    inv_homography: Tensor,
+    device: torch.device | str = "cpu",
     erosion_radius: int = 0,
-) -> torch.Tensor:
+) -> Tensor:
     """
     Вычисляет маску валидных пикселей после применения гомографии
     """
