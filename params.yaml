@@ -19,12 +19,17 @@ prepare_synthetic_data:
     gaussian_noise: 20_000
 
 train_magicpoint:
+  num_iters: 200_000
+  learning_rate: 0.001
+  cell_size: 8
+  detection_threshold: 0.001
+  nms_dist: 4 
   seed: ${seed}
   data_dir: ${synthetic_dataset}
   train_size: 0.8
-  train_batch_size: 128
-  val_batch_size: 32
-  num_workers: 0
+  train_batch_size: 64
+  val_batch_size: 16
+  num_workers: 12
   augmentation:
     homographic:
       allow_artifacts: true

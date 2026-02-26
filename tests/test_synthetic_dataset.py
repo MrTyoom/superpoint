@@ -14,6 +14,7 @@ from torch.types import Tensor
 
 root = rootutils.setup_root(__file__, indicator="src", pythonpath=True)
 EPS = 1e-8
+GRAY_CMAP = "gray"
 
 from src.synthetic_loader import SyntheticDataset
 
@@ -105,16 +106,7 @@ def prepare_tensor(tensor: Tensor) -> Tensor:
 
 def tensor_to_image(tensor: Tensor) -> Tensor:
     """Конвертирует тензор в numpy array для imshow"""
-    if tensor.dim() == 2:
-        return tensor.numpy()
-    if tensor.dim() == 3:
-        if tensor.shape[0] == 1:  # (1, H, W)
-            return tensor.squeeze(0).numpy()
-        if tensor.shape[2] == 1:  # (H, W, 1)
-            return tensor.squeeze(2).numpy()
-        if tensor.shape[0] == 3:  # (3, H, W) RGB
-            return tensor.permute(1, 2, 0).numpy()
-    return tensor.mean(dim=0).numpy()  # усреднение по каналам
+    return tensor.squeeze(0).numpy()
 
 
 def normalize_label(img_np: NDArray) -> NDArray:
@@ -128,24 +120,25 @@ def save_image_tensor(tensor: Tensor, filename: Path | str, is_label: bool = Fal
     """Основная функция сохранения"""
     tensor = prepare_tensor(tensor)
     img_np = tensor_to_image(tensor)
-    if is_label:
-        img_np = normalize_label(img_np)
 
     plt.figure(figsize=(6, 6))
-    if img_np.ndim == 2:
-        plt.imshow(img_np, cmap="gray", vmin=0, vmax=1)
+
+    if is_label:
+        plt.imshow(img_np, cmap=GRAY_CMAP, vmin=0, vmax=1)
     else:
-        plt.imshow(img_np)
+        img_np = (img_np - img_np.min()) / (img_np.max() - img_np.min() + EPS)
+        plt.imshow(img_np, cmap=GRAY_CMAP, vmin=0, vmax=1)
+
     plt.axis("off")
     plt.savefig(filename, bbox_inches="tight", pad_inches=0)
     plt.close()
     return True
 
 
-def test_image_saving(tmp_path: Path, synthetic_dataset: SyntheticDataset) -> None:
+def test_image_saving(synthetic_dataset: SyntheticDataset) -> None:
     """Тестирует сохранение изображений"""
-    output_dir = tmp_path / "test_output"
-    output_dir.mkdir()
+    output_dir = Path("tmp/test_output")
+    output_dir.mkdir(exist_ok=True)
 
     dataloader = torch.utils.data.DataLoader(synthetic_dataset, batch_size=4, shuffle=True, num_workers=0)
     batch = next(iter(dataloader))
@@ -153,10 +146,13 @@ def test_image_saving(tmp_path: Path, synthetic_dataset: SyntheticDataset) -> No
     mask_batch = batch[1]
     labels_batch = batch[2]
 
-    idx = 0
-    assert save_image_tensor(img_batch[idx], output_dir / "original_img.png")
-    assert save_image_tensor(labels_batch[idx], output_dir / "labels_2D.png", is_label=True)
-    assert save_image_tensor(mask_batch[idx], output_dir / "valid_mask.png", is_label=True)
+    img = img_batch[0].squeeze(0)
+    mask = mask_batch[0].squeeze(0)
+    labels = labels_batch[0].squeeze(0)
+
+    plt.imsave(output_dir / "image.png", img.numpy(), cmap=GRAY_CMAP)
+    plt.imsave(output_dir / "mask.png", mask.numpy(), cmap=GRAY_CMAP)
+    plt.imsave(output_dir / "labels.png", labels.numpy(), cmap=GRAY_CMAP)
 
 
 if __name__ == "__main__":

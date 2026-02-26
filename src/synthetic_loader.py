@@ -2,11 +2,14 @@ from pathlib import Path
 
 import cv2
 import numpy as np
+import rootutils
 import torch
 from lightning import LightningDataModule
 from omegaconf import DictConfig
 from torch.types import Tensor
 from torch.utils.data import DataLoader, Dataset
+
+rootutils.setup_root(__file__, indicator="src", pythonpath=True)
 
 from src.augmentation import PhotometricAugmentation
 from src.homography.apply import filter_points, homography_scaling_torch, inv_warp_image, warp_points
@@ -23,7 +26,7 @@ def get_labels(pnts: Tensor, height: int, width: int) -> Tensor:
 
     indices = (pnts_int[:, 1], pnts_int[:, 0])
     labels = labels.index_put_(indices, torch.ones(len(pnts_int)))
-    return labels
+    return labels.unsqueeze(0)
 
 
 class SyntheticDataset(Dataset):
@@ -56,7 +59,7 @@ class SyntheticDataset(Dataset):
 
         images = torch.from_numpy(src_image).float()
 
-        warped_img = inv_warp_image(images.squeeze(), inv_homography, mode="bilinear")
+        warped_img = inv_warp_image(images.squeeze(), inv_homography, mode="bilinear").unsqueeze(0)
 
         homography_scaled = homography_scaling_torch(homography, height, width)
 
@@ -67,6 +70,7 @@ class SyntheticDataset(Dataset):
 
         if self.mode == "val":
             masks = torch.ones(height, width)
+            masks = masks.unsqueeze(0)
         else:
             masks = compute_valid_mask(
                 torch.tensor([height, width]),
@@ -77,7 +81,6 @@ class SyntheticDataset(Dataset):
         labels = get_labels(warped_pts, height, width)
 
         sample = (warped_img, masks, labels)
-
         return sample
 
 
