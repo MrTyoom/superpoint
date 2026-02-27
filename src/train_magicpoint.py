@@ -17,6 +17,7 @@ from src.logger import LOG
 from src.synthetic_loader import Loader
 
 EPS = 1e-8
+SEMI = "semi"
 
 
 def get_heatmap(semi, image_size=None):
@@ -123,10 +124,10 @@ class MagicPoint(nn.Module):
         x3 = self.down2(x2)
         x4 = self.down3(x3)
 
-        cPa = self.relu(self.bnPa(self.convPa(x4)))
-        semi = self.bnPb(self.convPb(cPa))
+        cPa = self._relu(self._bnPa(self._convPa(x4)))
+        semi = self._bnPb(self._convPb(cPa))
 
-        return semi
+        return {SEMI: semi}
 
     def _double_conv(self, in_c, out_c):
         return nn.Sequential(
@@ -160,7 +161,7 @@ class MagicPointLightning(LightningModule):
         img, masks, labels = sample
 
         outs = self._net(img)
-        semi = outs["semi"]
+        semi = outs[SEMI]
 
         labels_classes, cell_mask = labels_to_classes(labels, masks, cfg.cell_size)
         loss_per_cell = self._criterion(semi, labels_classes)
@@ -195,7 +196,7 @@ class MagicPointLightning(LightningModule):
     def validation_step(self, sample: tuple[Tensor, ...]) -> None:
         img, masks, labels = sample
         outs = self(img)
-        semi = outs["semi"]
+        semi = outs[SEMI]
 
         labels_classes, cell_mask = labels_to_classes(labels, masks, cfg.cell_size)
 
@@ -226,7 +227,7 @@ class MagicPointLightning(LightningModule):
         img, masks, labels = sample
 
         outs = self(img)
-        semi = outs["semi"]
+        semi = outs[SEMI]
 
         heatmap = get_heatmap(semi, image_size=img.shape[2:])
 
@@ -257,7 +258,7 @@ class MagicPointLightning(LightningModule):
         self.test_recall.reset()
 
     def configure_optimizers(self) -> dict[str, Any]:
-        optimizer = torch.optim.Adam(self.net.parameters(), lr=self.cfg.learning_rate, betas=(0.9, 0.999))
+        optimizer = torch.optim.Adam(self._net.parameters(), lr=self.cfg.learning_rate, betas=(0.9, 0.999))
 
         return optimizer
 
@@ -284,7 +285,7 @@ def main(cfg: DictConfig) -> None:
     ]
 
     logger = DVCLiveLogger(
-        dir="data/logs", prefix="magicpoint", log_model="best", run_name=f"run_{cfg.seed}", save_dvc_exp=False
+        dir="models", prefix="magicpoint", log_model="best", run_name=f"run_{cfg.seed}", save_dvc_exp=False
     )
 
     trainer = Trainer(
