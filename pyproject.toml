@@ -19,6 +19,8 @@ dependencies = [
     "torch>=2.9.1",
     "torchvision>=0.24.1",
     "wemake-python-styleguide>=1.5.0",
+    "pytest>=9.0.2",
+    "dvclive>=3.49.0",
 ]
 
 [tool.ruff]
@@ -39,12 +41,15 @@ exclude = [
 exclude = [
     "scripts/*.py",
 ]
+max-imports = 20
+
 # Оставляем только правила WPS, так как остальное проверит Ruff
 select = "WPS"
 # Настройка специфичных для WPS параметров
 max-line-length = 120
 show-source = true
-ignore = ["WPS111", "WPS420"]
+ignore = ["WPS420"]
+per-file-ignores = "tests/*: WPS218, WPS301, WPS210, WPS478, src/*: WPS478, WPS210, WPS432"
 max-methods = 10
 max-line-complexity = 20
 max-module-members = 10

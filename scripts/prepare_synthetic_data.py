@@ -967,8 +967,13 @@ def generate_data(n, out_dir, draw_fn, background_size, image_size, blur_size):
 
     file = out_dir / str(n).zfill(6)
 
-    cv.imwrite(file.with_suffix(".png"), image)
-    np.save(file.with_suffix(".npy"), xy)
+    image_file = file.with_suffix(".png")
+    pts_file = file.with_suffix(".npy")
+    
+    cv.imwrite(image_file, image)
+    np.save(pts_file, xy)
+    
+    return image_file, pts_file
 
 
 def main(cfg: DictConfig):

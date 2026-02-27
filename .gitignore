@@ -1,5 +1,6 @@
 __pycache__
 
+tmp
 .ruff_cache
 .mypy_cache
 .DS_Store
