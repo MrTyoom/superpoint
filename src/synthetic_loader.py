@@ -2,14 +2,11 @@ from pathlib import Path
 
 import cv2
 import numpy as np
-import rootutils
 import torch
 from lightning import LightningDataModule
 from omegaconf import DictConfig
 from torch.types import Tensor
 from torch.utils.data import DataLoader, Dataset
-
-rootutils.setup_root(__file__, indicator="src", pythonpath=True)
 
 from src.augmentation import PhotometricAugmentation
 from src.homography.apply import filter_points, homography_scaling_torch, inv_warp_image, warp_points
