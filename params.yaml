@@ -24,6 +24,7 @@ train_magicpoint:
   cell_size: 8
   detection_threshold: 0.001
   nms_dist: 4 
+  max_val_samples: 10
   seed: ${seed}
   data_dir: ${synthetic_dataset}
   train_size: 0.8

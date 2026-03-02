@@ -3,3 +3,8 @@ stages:
     cmd: python scripts/prepare_synthetic_data.py
     params:
     - prepare_synthetic_data
+metrics:
+- models/metrics.json
+plots:
+- models/plots/metrics:
+    x: step

@@ -4,6 +4,8 @@ import torch
 from torch.nn.functional import grid_sample
 from torch.types import Tensor
 
+TWO = 2.0
+
 
 def inv_warp_image_batch(
     img: Tensor, mat_homo_inv: Tensor, device: torch.device | str = "cpu", mode: str = "bilinear"
@@ -108,8 +110,8 @@ def warp_points(points: Tensor, homographies: Tensor, device: torch.device | str
 
 
 def homography_scaling_torch(homography: Tensor, height: int, width: int) -> Tensor:
-    row1 = torch.tensor([2.0 / width, 0, -1])
-    row2 = torch.tensor([0, 2.0 / height, -1])
+    row1 = torch.tensor([TWO / width, 0, -1])
+    row2 = torch.tensor([0, TWO / height, -1])
     row3 = torch.tensor([0, 0, 1.0])
 
     trans = torch.stack([row1, row2, row3])
