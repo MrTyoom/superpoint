@@ -18,6 +18,8 @@ def main(cfg: DictConfig) -> None:
     seed_everything(cfg.seed)
 
     loader = Loader(cfg)
+    loader.setup(stage="fit")
+
     model = MagicPointLightning(cfg)
 
     callbacks = [
@@ -31,7 +33,7 @@ def main(cfg: DictConfig) -> None:
     )
 
     trainer = Trainer(
-        max_steps=cfg.num_iters,
+        max_epochs=cfg.num_epochs,
         default_root_dir="data/logs",
         callbacks=callbacks,
         logger=logger,
