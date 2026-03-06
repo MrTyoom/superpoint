@@ -1,7 +1,8 @@
 import rootutils
+import torch
 from dvclive.lightning import DVCLiveLogger
 from lightning import Trainer, seed_everything
-from lightning.pytorch.callbacks import LearningRateMonitor, ModelCheckpoint, RichProgressBar
+from lightning.pytorch.callbacks import ModelCheckpoint, RichProgressBar
 from omegaconf import DictConfig, OmegaConf
 
 rootutils.setup_root(__file__, indicator="src", pythonpath=True)
@@ -12,33 +13,30 @@ from src.synthetic_loader import Loader
 
 REFRESH_RATE = 50
 
+torch.set_float32_matmul_precision("medium")
+
 
 def main(cfg: DictConfig) -> None:
     LOG.info("set seed: {0}".format(cfg.seed))
     seed_everything(cfg.seed)
 
     loader = Loader(cfg)
-    loader.setup(stage="fit")
-
     model = MagicPointLightning(cfg)
 
     callbacks = [
-        LearningRateMonitor(logging_interval="epoch"),
-        ModelCheckpoint(save_top_k=2, monitor="val/epoch_precision", mode="max", every_n_epochs=1),
+        ModelCheckpoint(dirpath=cfg.log_dir, save_top_k=2, monitor="val/epoch_precision", mode="max", save_last=True),
         RichProgressBar(refresh_rate=REFRESH_RATE),
     ]
 
-    logger = DVCLiveLogger(
-        dir="models", prefix="magicpoint", log_model="best", run_name=f"run_{cfg.seed}", save_dvc_exp=False
-    )
+    logger = DVCLiveLogger(prefix="magicpoint", log_model=False)
 
     trainer = Trainer(
         max_epochs=cfg.num_epochs,
-        default_root_dir="data/logs",
+        limit_val_batches=cfg.max_val_samples,
+        default_root_dir=cfg.log_dir,
         callbacks=callbacks,
         logger=logger,
-        accelerator="gpu",
-        devices=1,
+        accelerator="gpu" if torch.cuda.is_available() else "cpu",
     )
 
     trainer.fit(model, loader)

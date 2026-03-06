@@ -2,7 +2,7 @@ from typing import Any
 
 import torch
 from lightning import LightningModule
-from omegaconf import DictConfig
+from omegaconf import DictConfig, OmegaConf
 from torch.nn import BatchNorm2d, Conv2d, CrossEntropyLoss, MaxPool2d, Module, ReLU
 from torch.types import Tensor
 from torchmetrics import MeanMetric
@@ -99,20 +99,18 @@ class MagicPointLightning(LightningModule):
     def __init__(self, cfg: DictConfig) -> None:
         super().__init__()
 
-        self.cfg = cfg
-
         self._descriptor = False
         self._criterion = CrossEntropyLoss(reduction="none")
         self._net = SuperPoint()
-        self._max_validation_samples = cfg.max_val_samples
 
         self.train_loss = MeanMetric()
         self.val_loss = MeanMetric()
 
-        self.validation_samples: list[Any] = []
+        self.val_precision = MeanMetric()
+        self.val_recall = MeanMetric()
 
-        self.test_precision = MeanMetric()
-        self.test_recall = MeanMetric()
+        cfg_dict = OmegaConf.to_container(cfg, resolve=True)
+        self.save_hyperparameters(cfg_dict)
 
     def forward(self, synth_data: Tensor) -> Tensor:
         return self._net(batch=synth_data, descriptor=self._descriptor)
@@ -120,140 +118,77 @@ class MagicPointLightning(LightningModule):
     def training_step(self, sample: tuple[Tensor, ...]) -> Tensor:
         img, masks, labels = sample
 
-        outs = self(img)
-        semi = outs
+        semi = self(img)
 
-        labels_three_dim = get_labels(labels_two_dim=labels, cell_size=self.cfg.cell_size)
-        mask_three_dim_flat = get_masks(masks_two_dim=masks, cell_size=self.cfg.cell_size)
+        labels_three_dim = get_labels(labels_two_dim=labels, cell_size=self.hparams.cell_size)
+        mask_three_dim_flat = get_masks(masks_two_dim=masks, cell_size=self.hparams.cell_size)
 
         loss_per_cell = self._criterion(semi, labels_three_dim)
         loss = (loss_per_cell * mask_three_dim_flat).sum() / (mask_three_dim_flat.sum() + EPS)
 
         self.train_loss(loss)
-        self.log("train/loss", loss, on_step=True, on_epoch=True, prog_bar=True)
-
         return loss
 
     def on_train_epoch_end(self) -> None:
         loss = self.train_loss.compute()
         self.train_loss.reset()
-        self.log("train/loss_epoch", loss)
+        self.log("train/loss", loss, on_step=False, on_epoch=True)
 
     def validation_step(self, sample: tuple[Tensor, ...]) -> None:
-        with torch.no_grad():
-            img, masks, labels = sample
-
-            outs = self(img)
-            semi = outs
-
-            labels_three_dim = get_labels(labels_two_dim=labels, cell_size=self.cfg.cell_size)
-            mask_three_dim_flat = get_masks(masks_two_dim=masks, cell_size=self.cfg.cell_size)
-
-            loss_per_cell = self._criterion(semi, labels_three_dim)
-            loss = (loss_per_cell * mask_three_dim_flat).sum() / (mask_three_dim_flat.sum() + EPS)
-
-            self.val_loss(loss)
-            self.log("val/loss", loss, on_step=True, on_epoch=True, prog_bar=True)
-
-            if len(self.validation_samples) < self._max_validation_samples:
-                self.validation_samples.append(
-                    {
-                        "semi": semi.detach().cpu(),
-                        "img": img.detach().cpu(),
-                        "labels": labels.detach().cpu(),
-                        "masks": masks.detach().cpu(),
-                    }
-                )
-                LOG.info(f"Saved validation sample {len(self.validation_samples)}/{self._max_validation_samples}")
-
-    def on_validation_epoch_end(self) -> None:
-        avg_loss = self.val_loss.compute()
-        self.val_loss.reset()
-        self.log("val/epoch_loss", avg_loss)
-
-        if self.validation_samples:
-            self._compute_validation_metrics(avg_loss)
-
-        self.validation_samples.clear()
-
-    def test_step(self, sample: tuple[Tensor, ...]) -> None:
         img, masks, labels = sample
 
-        outs = self(img)
-        semi = outs
+        semi = self(img)
+
+        labels_three_dim = get_labels(labels_two_dim=labels, cell_size=self.hparams.cell_size)
+        mask_three_dim_flat = get_masks(masks_two_dim=masks, cell_size=self.hparams.cell_size)
+
+        loss_per_cell = self._criterion(semi, labels_three_dim)
+        loss = (loss_per_cell * mask_three_dim_flat).sum() / (mask_three_dim_flat.sum() + EPS)
+        self.val_loss(loss)
 
         heatmap = get_heatmap(semi)
 
-        for batch_idx in range(semi.shape[0]):
-            heatmap_np = heatmap[batch_idx, 0]
-            heatmap_np = heatmap_np.cpu().numpy()
-            pts_nms = getPtsFromHeatmap(heatmap_np, self.cfg.detection_threshold, self.cfg.nms_dist)
+        batch_precision = []
+        batch_recall = []
 
-            pred_map = torch.zeros_like(labels[batch_idx, 0])
+        for batch in range(semi.shape[0]):
+            heatmap_np = heatmap[batch, 0]
+            heatmap_np = heatmap_np.cpu().numpy()
+            pts_nms = getPtsFromHeatmap(heatmap_np, self.hparams.detection_threshold, self.hparams.nms_dist)  # (2, N)
+
+            pred_map = torch.zeros_like(labels[batch, 0]).cpu()
+            pts_nms = torch.from_numpy(pts_nms).long()
             if pts_nms.shape[1] > 0:
                 pred_map[pts_nms[1, :].long(), pts_nms[0, :].long()] = 1
 
-            gt_map = (labels[batch_idx, 0] * masks[batch_idx, 0]).cpu()
+            gt_map = (labels[batch, 0] * masks[batch, 0]).cpu()
 
             pr = precisionRecall(pred_map, gt_map)
+            batch_precision.append(pr["precision"])
+            batch_recall.append(pr["recall"])
 
-            self.test_precision(pr["precision"])
-            self.test_recall(pr["recall"])
+        if batch_precision:
+            avg_batch_precision = sum(batch_precision) / len(batch_precision)
+            avg_batch_recall = sum(batch_recall) / len(batch_recall)
 
-            self.log("test/precision", pr["precision"], on_step=True)
-            self.log("test/recall", pr["recall"], on_step=True)
+            self.val_precision.update(torch.tensor(avg_batch_precision))
+            self.val_recall.update(torch.tensor(avg_batch_recall))
 
-    def on_test_epoch_end(self) -> None:
-        precision = self.test_precision.compute()
-        recall = self.test_recall.compute()
+    def on_validation_epoch_end(self) -> None:
+        avg_loss = self.val_loss.compute()
+        avg_precision = self.val_precision.compute()
+        avg_recall = self.val_recall.compute()
 
-        self.log("test/epoch_precision", precision)
-        self.log("test/epoch_recall", recall)
+        self.log("val/epoch_loss", avg_loss, on_step=False, on_epoch=True)
+        self.log("val/epoch_precision", avg_precision, on_step=False, on_epoch=True)
+        self.log("val/epoch_recall", avg_recall, on_step=False, on_epoch=True)
 
-        self.test_precision.reset()
-        self.test_recall.reset()
+        LOG.info(f"Validation - Loss: {avg_loss:.4f}, Precision: {avg_precision:.4f}, Recall: {avg_recall:.4f}")
+
+        self.val_loss.reset()
+        self.val_precision.reset()
+        self.val_recall.reset()
 
     def configure_optimizers(self) -> dict[str, Any]:
-        optimizer = torch.optim.Adam(self._net.parameters(), lr=self.cfg.learning_rate, betas=(0.9, 0.999))
+        optimizer = torch.optim.Adam(self._net.parameters(), lr=self.hparams.learning_rate, betas=(0.9, 0.999))
         return optimizer
-
-    def _compute_validation_metrics(self, avg_loss: MeanMetric) -> None:
-        all_precision = []
-        all_recall = []
-
-        LOG.info(f"Computing precision/recall on {len(self.validation_samples)} validation batches...")
-
-        for batch in self.validation_samples:
-            semi = batch["semi"].to(self.device)
-            img = batch["img"].to(self.device)
-            labels = batch["labels"].to(self.device)
-            masks = batch["masks"].to(self.device)
-
-            heatmap = get_heatmap(semi)
-
-            for batch in range(semi.shape[0]):
-                heatmap_np = heatmap[batch, 0]
-                heatmap_np = heatmap_np.cpu().numpy()
-                pts_nms = getPtsFromHeatmap(heatmap_np, self.cfg.detection_threshold, self.cfg.nms_dist)  # (2, N)
-
-                pred_map = torch.zeros_like(labels[batch, 0]).cpu()
-                pts_nms = torch.from_numpy(pts_nms).long()
-                if pts_nms.shape[1] > 0:
-                    pred_map[pts_nms[1, :].long(), pts_nms[0, :].long()] = 1
-
-                gt_map = (labels[batch, 0] * masks[batch, 0]).cpu()
-
-                pr = precisionRecall(pred_map, gt_map)
-                all_precision.append(pr["precision"])
-                all_recall.append(pr["recall"])
-
-            del semi, img, labels, masks, heatmap
-
-        if all_precision:
-            avg_precision = sum(all_precision) / len(all_precision)
-            avg_recall = sum(all_recall) / len(all_recall)
-
-            self.log("val/epoch_precision", avg_precision)
-            self.log("val/epoch_recall", avg_recall)
-
-            LOG.info(f"Validation - Loss: {avg_loss:.4f}, Precision: {avg_precision:.4f}, Recall: {avg_recall:.4f}")

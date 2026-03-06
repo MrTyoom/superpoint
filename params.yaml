@@ -26,6 +26,7 @@ train_magicpoint:
   nms_dist: 4 
   max_val_samples: 10
   seed: ${seed}
+  log_dir: results/train_magic_point
   data_dir: ${synthetic_dataset}
   train_size: 0.8
   train_batch_size: 64
