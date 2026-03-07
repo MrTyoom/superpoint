@@ -21,7 +21,9 @@ def main(cfg: DictConfig) -> None:
     seed_everything(cfg.seed)
 
     loader = Loader(cfg)
-    model = MagicPointLightning(cfg)
+
+    cfg_dict = OmegaConf.to_container(cfg, resolve=True)
+    model = MagicPointLightning(cfg_dict)
 
     callbacks = [
         ModelCheckpoint(dirpath=cfg.log_dir, save_top_k=2, monitor="val/epoch_precision", mode="max", save_last=True),

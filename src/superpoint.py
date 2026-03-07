@@ -2,7 +2,7 @@ from typing import Any
 
 import torch
 from lightning import LightningModule
-from omegaconf import DictConfig, OmegaConf
+from omegaconf import DictConfig
 from torch.nn import BatchNorm2d, Conv2d, CrossEntropyLoss, MaxPool2d, Module, ReLU
 from torch.types import Tensor
 from torchmetrics import MeanMetric
@@ -109,8 +109,7 @@ class MagicPointLightning(LightningModule):
         self.val_precision = MeanMetric()
         self.val_recall = MeanMetric()
 
-        cfg_dict = OmegaConf.to_container(cfg, resolve=True)
-        self.save_hyperparameters(cfg_dict)
+        self.save_hyperparameters(cfg)
 
     def forward(self, synth_data: Tensor) -> Tensor:
         return self._net(batch=synth_data, descriptor=self._descriptor)
