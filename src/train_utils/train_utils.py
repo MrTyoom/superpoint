@@ -1,5 +1,4 @@
 import numpy as np
-import torch
 
 
 def getPtsFromHeatmap(heatmap, conf_thresh, nms_dist):
@@ -102,10 +101,3 @@ def nms_fast(in_corners, height, width, dist_thresh):
     out = out[:, inds2]
     out_inds = inds1[inds_keep[inds2]]
     return out, out_inds
-
-
-def precisionRecall(pred, labels):
-    offset = 10**-6
-    precision = torch.sum(pred * labels) / (torch.sum(pred) + offset)
-    recall = torch.sum(pred * labels) / (torch.sum(labels) + offset)
-    return {"precision": precision, "recall": recall}

@@ -3,14 +3,12 @@ from typing import Any
 import torch
 from lightning import LightningModule
 from omegaconf import DictConfig
-from torch.nn import BatchNorm2d, Conv2d, CrossEntropyLoss, MaxPool2d, Module, ReLU
+from torch.nn import BatchNorm2d, BCELoss, Conv2d, MaxPool2d, Module, ReLU
 from torch.types import Tensor
 from torchmetrics import MeanMetric
 
-from src.logger import LOG
-from src.loss import get_labels, get_masks
-from src.metrics import get_heatmap
-from src.train_utils.train_utils import getPtsFromHeatmap, precisionRecall
+from src.loss import loss_calculation
+from src.metrics import calculate_precisionRecall, get_heatmap
 
 EPS = 1e-8
 SEMI = "semi"
@@ -100,7 +98,7 @@ class MagicPointLightning(LightningModule):
         super().__init__()
 
         self._descriptor = False
-        self._criterion = CrossEntropyLoss(reduction="none")
+        self._criterion = BCELoss(reduction="none")
         self._net = SuperPoint()
 
         self.train_loss = MeanMetric()
@@ -118,12 +116,7 @@ class MagicPointLightning(LightningModule):
         img, masks, labels = sample
 
         semi = self(img)
-
-        labels_three_dim = get_labels(labels_two_dim=labels, cell_size=self.hparams.cell_size)
-        mask_three_dim_flat = get_masks(masks_two_dim=masks, cell_size=self.hparams.cell_size)
-
-        loss_per_cell = self._criterion(semi, labels_three_dim)
-        loss = (loss_per_cell * mask_three_dim_flat).sum() / (mask_three_dim_flat.sum() + EPS)
+        loss = loss_calculation(semi, labels, masks, self._criterion, self.hparams.cell_size)
 
         self.train_loss(loss)
         return loss
@@ -137,36 +130,24 @@ class MagicPointLightning(LightningModule):
         img, masks, labels = sample
 
         semi = self(img)
+        loss = loss_calculation(semi, labels, masks, self._criterion, self.hparams.cell_size)
 
-        labels_three_dim = get_labels(labels_two_dim=labels, cell_size=self.hparams.cell_size)
-        mask_three_dim_flat = get_masks(masks_two_dim=masks, cell_size=self.hparams.cell_size)
-
-        loss_per_cell = self._criterion(semi, labels_three_dim)
-        loss = (loss_per_cell * mask_three_dim_flat).sum() / (mask_three_dim_flat.sum() + EPS)
         self.val_loss(loss)
 
         heatmap = get_heatmap(semi)
 
         batch_precision = []
         batch_recall = []
+        lab_mask = (labels, masks)
 
         for batch in range(semi.shape[0]):
-            heatmap_np = heatmap[batch, 0]
-            heatmap_np = heatmap_np.cpu().numpy()
-            pts_nms = getPtsFromHeatmap(heatmap_np, self.hparams.detection_threshold, self.hparams.nms_dist)  # (2, N)
-
-            pred_map = torch.zeros_like(labels[batch, 0]).cpu()
-            pts_nms = torch.from_numpy(pts_nms).long()
-            if pts_nms.shape[1] > 0:
-                pred_map[pts_nms[1, :].long(), pts_nms[0, :].long()] = 1
-
-            gt_map = (labels[batch, 0] * masks[batch, 0]).cpu()
-
-            pr = precisionRecall(pred_map, gt_map)
+            pr = calculate_precisionRecall(
+                batch, heatmap, lab_mask, self.hparams.detection_threshold, self.hparams.nms_dist
+            )
             batch_precision.append(pr["precision"])
             batch_recall.append(pr["recall"])
 
-        if batch_precision:
+        if len(batch_precision) > 0:
             avg_batch_precision = sum(batch_precision) / len(batch_precision)
             avg_batch_recall = sum(batch_recall) / len(batch_recall)
 
@@ -181,8 +162,6 @@ class MagicPointLightning(LightningModule):
         self.log("val/epoch_loss", avg_loss, on_step=False, on_epoch=True)
         self.log("val/epoch_precision", avg_precision, on_step=False, on_epoch=True)
         self.log("val/epoch_recall", avg_recall, on_step=False, on_epoch=True)
-
-        LOG.info(f"Validation - Loss: {avg_loss:.4f}, Precision: {avg_precision:.4f}, Recall: {avg_recall:.4f}")
 
         self.val_loss.reset()
         self.val_precision.reset()

@@ -12,6 +12,8 @@ from src.augmentation import PhotometricAugmentation
 from src.homography.apply import filter_points, homography_scaling_torch, inv_warp_image, warp_points
 from src.homography.homography_utils import compute_valid_mask, sample_homography
 
+MAX_PIXEL = 255.0
+
 
 def get_labels(pnts: Tensor, height: int, width: int) -> Tensor:
     labels = torch.zeros(height, width)
@@ -54,7 +56,7 @@ class SyntheticDataset(Dataset):
             homography = torch.eye(3)
             inv_homography = torch.eye(3)
 
-        images = torch.from_numpy(src_image).float()
+        images = torch.from_numpy(src_image).float() / MAX_PIXEL
 
         warped_img = inv_warp_image(images.squeeze(), inv_homography, mode="bilinear").unsqueeze(0)
 
