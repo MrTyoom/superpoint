@@ -3,16 +3,15 @@
 import cv2
 import numpy as np
 import torch
-from numpy.typing import NDArray
 from omegaconf import DictConfig
-from torch.types import Tensor
 
 from src.homography.apply import inv_warp_image_batch
 from src.homography.generation import get_corners
 from src.homography.transforms import perspective_transform
+from src.types import Array, Tensor
 
 
-def sample_homography(cfg: DictConfig, shape: NDArray, shift: int) -> tuple[Tensor, Tensor]:
+def sample_homography(cfg: DictConfig, shape: Array, shift: int) -> tuple[Tensor, Tensor]:
     """
     Генерирует случайную гомографию
     """
@@ -22,11 +21,12 @@ def sample_homography(cfg: DictConfig, shape: NDArray, shift: int) -> tuple[Tens
     pts1 *= shape[np.newaxis]
     pts2 *= shape[np.newaxis]
 
-    inv_homography = cv2.getPerspectiveTransform(np.float32(pts1 + shift), np.float32(pts2 + shift))
+    inv_homography = cv2.getPerspectiveTransform(np.float32(pts1 + shift), np.float32(pts2 + shift))  # type: ignore
     homography = np.linalg.inv(inv_homography)
 
     homography = torch.tensor(homography).float()
     inv_homography = torch.tensor(inv_homography).float()
+
     return homography, inv_homography
 
 
@@ -43,9 +43,9 @@ def compute_valid_mask(
         inv_homography = inv_homography.view(-1, 3, 3)
 
     batch_size = inv_homography.shape[0]
-    mask = torch.ones(batch_size, 1, image_shape[0], image_shape[1]).to(device)
+    mask = torch.ones(batch_size, 1, image_shape[0], image_shape[1]).to(device)  # type: ignore
     mask = inv_warp_image_batch(mask, inv_homography, device=device, mode="nearest")
-    mask = mask.view(batch_size, image_shape[0], image_shape[1])
+    mask = mask.view(batch_size, image_shape[0], image_shape[1])  # type: ignore
     mask = mask.cpu().numpy()
 
     if erosion_radius > 0:

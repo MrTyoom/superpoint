@@ -1,20 +1,14 @@
-from typing import Any
-
 import torch
 from lightning import LightningModule
-from omegaconf import DictConfig
 from torch.nn import BatchNorm2d, BCELoss, Conv2d, MaxPool2d, Module, ReLU
-from torch.types import Tensor
 from torchmetrics import MeanMetric
 
 from src.loss import loss_calculation
-from src.metrics import calculate_precisionRecall, get_heatmap
-
-EPS = 1e-8
-SEMI = "semi"
+from src.metrics import batch_precision_recall, get_heatmap
+from src.types import Tensor
 
 
-class SuperPoint(Module):
+class SuperPoint(Module):  # noqa: WPS230
     def __init__(self):
         super().__init__()
 
@@ -29,28 +23,28 @@ class SuperPoint(Module):
         self.relu = ReLU(inplace=True)
         self.pool = MaxPool2d(kernel_size=2, stride=2)
 
-        self._bn1a = BatchNorm2d(c1)
-        self._bn1b = BatchNorm2d(c1)
-        self._bn2a = BatchNorm2d(c2)
-        self._bn2b = BatchNorm2d(c2)
-        self._bn3a = BatchNorm2d(c3)
-        self._bn3b = BatchNorm2d(c3)
-        self._bn4a = BatchNorm2d(c4)
-        self._bn4b = BatchNorm2d(c4)
-        self._bnPa = BatchNorm2d(c5)
-        self._bnPb = BatchNorm2d(det_h)
-        self._bnDa = BatchNorm2d(c5)
-        self._bnDb = BatchNorm2d(d1)
+        self.bn1a = BatchNorm2d(c1)
+        self.bn1b = BatchNorm2d(c1)
+        self.bn2a = BatchNorm2d(c2)
+        self.bn2b = BatchNorm2d(c2)
+        self.bn3a = BatchNorm2d(c3)
+        self.bn3b = BatchNorm2d(c3)
+        self.bn4a = BatchNorm2d(c4)
+        self.bn4b = BatchNorm2d(c4)
+        self.bnPa = BatchNorm2d(c5)
+        self.bnPb = BatchNorm2d(det_h)
+        self.bnDa = BatchNorm2d(c5)
+        self.bnDb = BatchNorm2d(d1)
 
         # Encoder.
-        self._conv1a = Conv2d(1, c1, 3, padding=1)
-        self._conv1b = Conv2d(c1, c1, 3, padding=1)
-        self._conv2a = Conv2d(c1, c2, 3, padding=1)
-        self._conv2b = Conv2d(c2, c2, 3, padding=1)
-        self._conv3a = Conv2d(c2, c3, 3, padding=1)
-        self._conv3b = Conv2d(c3, c3, 3, padding=1)
-        self._conv4a = Conv2d(c3, c4, 3, padding=1)
-        self._conv4b = Conv2d(c4, c4, 3, padding=1)
+        self.conv1a = Conv2d(1, c1, 3, padding=1)
+        self.conv1b = Conv2d(c1, c1, 3, padding=1)
+        self.conv2a = Conv2d(c1, c2, 3, padding=1)
+        self.conv2b = Conv2d(c2, c2, 3, padding=1)
+        self.conv3a = Conv2d(c2, c3, 3, padding=1)
+        self.conv3b = Conv2d(c3, c3, 3, padding=1)
+        self.conv4a = Conv2d(c3, c4, 3, padding=1)
+        self.conv4b = Conv2d(c4, c4, 3, padding=1)
 
         # Detector Head.
         self.convPa = Conv2d(c4, c5, kernel_size=3, padding=1)
@@ -62,39 +56,40 @@ class SuperPoint(Module):
 
     def forward(self, batch: Tensor, descriptor=True):
         # Encoder
-        x1 = self.relu(self._bn1a(self._conv1a(batch)))
-        x2 = self.relu(self._bn1b(self._conv1b(x1)))
+        x1 = self.relu(self.bn1a(self.conv1a(batch)))
+        x2 = self.relu(self.bn1b(self.conv1b(x1)))
         x3 = self.pool(x2)
 
-        x4 = self.relu(self._bn2a(self._conv2a(x3)))
-        x5 = self.relu(self._bn2b(self._conv2b(x4)))
+        x4 = self.relu(self.bn2a(self.conv2a(x3)))
+        x5 = self.relu(self.bn2b(self.conv2b(x4)))
         x6 = self.pool(x5)
 
-        x7 = self.relu(self._bn3a(self._conv3a(x6)))
-        x8 = self.relu(self._bn3b(self._conv3b(x7)))
+        x7 = self.relu(self.bn3a(self.conv3a(x6)))
+        x8 = self.relu(self.bn3b(self.conv3b(x7)))
         x9 = self.pool(x8)
 
-        x10 = self.relu(self._bn4a(self._conv4a(x9)))
-        feats = self.relu(self._bn4b(self._conv4b(x10)))
+        x10 = self.relu(self.bn4a(self.conv4a(x9)))
+        feats = self.relu(self.bn4b(self.conv4b(x10)))
 
         # Detector Head
-        cPa = self.relu(self._bnPa(self.convPa(feats)))
-        semi = self._bnPb(self.convPb(cPa))
+        cPa = self.relu(self.bnPa(self.convPa(feats)))
+        semi = self.bnPb(self.convPb(cPa))
 
         if not descriptor:
             return semi
 
         # Descriptor Head
-        cDa = self.relu(self._bnDa(self.convDa(feats)))
-        desc = self._bnDb(self.convDb(cDa))
+        cDa = self.relu(self.bnDa(self.convDa(feats)))
+        desc = self.bnDb(self.convDb(cDa))
 
         dn = torch.norm(desc, p=2, dim=1)
         desc = desc.div(torch.unsqueeze(dn, 1))
+
         return semi, desc
 
 
 class MagicPointLightning(LightningModule):
-    def __init__(self, cfg: DictConfig) -> None:
+    def __init__(self, cfg: dict) -> None:
         super().__init__()
 
         self._descriptor = False
@@ -114,11 +109,11 @@ class MagicPointLightning(LightningModule):
 
     def training_step(self, sample: tuple[Tensor, ...]) -> Tensor:
         img, masks, labels = sample
-
         semi = self(img)
-        loss = loss_calculation(semi, labels, masks, self._criterion, self.hparams.cell_size)
 
+        loss = loss_calculation(semi, labels, masks, self._criterion, self.hparams.cell_size)  # type: ignore
         self.train_loss(loss)
+
         return loss
 
     def on_train_epoch_end(self) -> None:
@@ -128,45 +123,37 @@ class MagicPointLightning(LightningModule):
 
     def validation_step(self, sample: tuple[Tensor, ...]) -> None:
         img, masks, labels = sample
-
         semi = self(img)
-        loss = loss_calculation(semi, labels, masks, self._criterion, self.hparams.cell_size)
 
+        loss = loss_calculation(semi, labels, masks, self._criterion, self.hparams.cell_size)  # type: ignore
         self.val_loss(loss)
 
         heatmap = get_heatmap(semi)
 
-        batch_precision = []
-        batch_recall = []
-        lab_mask = (labels, masks)
+        precision, recall = batch_precision_recall(
+            heatmap,
+            labels,
+            masks,
+            self.hparams.detection_threshold,
+            self.hparams.nms_dist,  # type: ignore
+        )
 
-        for batch in range(semi.shape[0]):
-            pr = calculate_precisionRecall(
-                batch, heatmap, lab_mask, self.hparams.detection_threshold, self.hparams.nms_dist
-            )
-            batch_precision.append(pr["precision"])
-            batch_recall.append(pr["recall"])
-
-        if len(batch_precision) > 0:
-            avg_batch_precision = sum(batch_precision) / len(batch_precision)
-            avg_batch_recall = sum(batch_recall) / len(batch_recall)
-
-            self.val_precision.update(torch.tensor(avg_batch_precision))
-            self.val_recall.update(torch.tensor(avg_batch_recall))
+        self.val_precision.update(precision)
+        self.val_recall.update(recall)
 
     def on_validation_epoch_end(self) -> None:
         avg_loss = self.val_loss.compute()
         avg_precision = self.val_precision.compute()
         avg_recall = self.val_recall.compute()
 
-        self.log("val/epoch_loss", avg_loss, on_step=False, on_epoch=True)
-        self.log("val/epoch_precision", avg_precision, on_step=False, on_epoch=True)
-        self.log("val/epoch_recall", avg_recall, on_step=False, on_epoch=True)
+        self.log("val/loss", avg_loss, on_step=False, on_epoch=True)
+        self.log("val/precision", avg_precision, on_step=False, on_epoch=True)
+        self.log("val/recall", avg_recall, on_step=False, on_epoch=True)
 
         self.val_loss.reset()
         self.val_precision.reset()
         self.val_recall.reset()
 
-    def configure_optimizers(self) -> dict[str, Any]:
-        optimizer = torch.optim.Adam(self._net.parameters(), lr=self.hparams.learning_rate, betas=(0.9, 0.999))
+    def configure_optimizers(self):  # type: ignore
+        optimizer = torch.optim.Adam(self._net.parameters(), lr=self.hparams.learning_rate)  # type: ignore
         return optimizer

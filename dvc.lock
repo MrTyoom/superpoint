@@ -8,6 +8,9 @@ stages:
           seed: ${seed}
           data_dir: ${synthetic_dataset}
           blur_size: 21
+          background_size:
+          - 960
+          - 1280
           image_size:
           - 120
           - 160

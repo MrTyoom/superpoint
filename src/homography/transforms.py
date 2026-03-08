@@ -2,14 +2,14 @@
 
 import numpy as np
 from numpy.random import randint, uniform
-from numpy.typing import NDArray
 from omegaconf import DictConfig
 from scipy.stats import truncnorm
 
 from src.homography.generation import add_perspective
+from src.types import Array
 
 
-def calc_scales_and_center(cfg, pts: NDArray, std_trunc: int = 2) -> tuple[NDArray, NDArray]:
+def calc_scales_and_center(cfg, pts: Array, std_trunc: int = 2) -> tuple[Array, Array]:
     """Вычисляет возможные масштабы и центр для масштабирования"""
     scales = truncnorm(-std_trunc, std_trunc, loc=1, scale=cfg.scaling_amplitude / 2).rvs(cfg.n_scales)
     scales = np.concatenate((np.array([1]), scales), axis=0)
@@ -17,7 +17,7 @@ def calc_scales_and_center(cfg, pts: NDArray, std_trunc: int = 2) -> tuple[NDArr
     return scales, center
 
 
-def get_scaling(cfg: DictConfig, pts: NDArray) -> NDArray:
+def get_scaling(cfg: DictConfig, pts: Array) -> Array:
     """Применяет случайное масштабирование к углам"""
     scales, center = calc_scales_and_center(cfg, pts)
 
@@ -36,7 +36,7 @@ def get_scaling(cfg: DictConfig, pts: NDArray) -> NDArray:
     return pts[idx]
 
 
-def get_translation(cfg: DictConfig, pts: NDArray) -> NDArray:
+def get_translation(cfg: DictConfig, pts: Array) -> Array:
     """Применяет случайный сдвиг к углам"""
     t_min, t_max = np.min(pts, axis=0), np.min(1 - pts, axis=0)
 
@@ -50,7 +50,7 @@ def get_translation(cfg: DictConfig, pts: NDArray) -> NDArray:
     return pts + np.array([x_rnd, y_rnd]).T
 
 
-def calc_rotation(cfg: DictConfig, pts: NDArray):
+def calc_rotation(cfg: DictConfig, pts: Array):
     """Вычисляет матрицы поворота для всех возможных углов"""
     angles = np.linspace(-cfg.max_angle, cfg.max_angle, num=cfg.n_angles)
     angles = np.concatenate((angles, np.array([0])), axis=0)
@@ -66,7 +66,7 @@ def calc_rotation(cfg: DictConfig, pts: NDArray):
     return center, rot_mat
 
 
-def get_rotation(cfg: DictConfig, pts: NDArray) -> NDArray:
+def get_rotation(cfg: DictConfig, pts: Array) -> Array:
     """Применяет случайный поворот к углам"""
     center, rot_mat = calc_rotation(cfg, pts)
 
@@ -84,7 +84,7 @@ def get_rotation(cfg: DictConfig, pts: NDArray) -> NDArray:
     return pts[idx]
 
 
-def perspective_transform(cfg: DictConfig, pts: NDArray) -> NDArray:
+def perspective_transform(cfg: DictConfig, pts: Array) -> Array:
     """Последовательно применяет все трансформации к углам"""
     if cfg.perspective:
         pts = add_perspective(cfg, pts)

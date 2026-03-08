@@ -23,10 +23,10 @@ def main(cfg: DictConfig) -> None:
     loader = Loader(cfg)
 
     cfg_dict = OmegaConf.to_container(cfg, resolve=True)
-    model = MagicPointLightning(cfg_dict)
+    model = MagicPointLightning(cfg_dict)  # type: ignore
 
     callbacks = [
-        ModelCheckpoint(dirpath=cfg.log_dir, save_top_k=2, monitor="val/epoch_precision", mode="max", save_last=True),
+        ModelCheckpoint(dirpath=cfg.log_dir, save_top_k=2, monitor="val/precision", mode="max", save_last=True),
         RichProgressBar(refresh_rate=REFRESH_RATE),
     ]
 
@@ -34,7 +34,7 @@ def main(cfg: DictConfig) -> None:
 
     trainer = Trainer(
         max_epochs=cfg.num_epochs,
-        limit_val_batches=cfg.max_val_samples,
+        limit_val_batches=cfg.limit_val_batches,
         default_root_dir=cfg.log_dir,
         callbacks=callbacks,
         logger=logger,
@@ -46,6 +46,6 @@ def main(cfg: DictConfig) -> None:
 
 if __name__ == "__main__":
     cfg = OmegaConf.load("params.yaml")
-    cfg = cfg["train_magicpoint"]
+    cfg = cfg.train_magicpoint
 
     main(cfg)

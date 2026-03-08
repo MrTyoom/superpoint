@@ -19,18 +19,18 @@ prepare_synthetic_data:
     gaussian_noise: 20_000
 
 train_magicpoint:
-  num_epochs: 100
+  num_epochs: 300
   learning_rate: 0.001
   cell_size: 8
   detection_threshold: 0.001
   nms_dist: 4 
-  max_val_samples: 10
+  limit_val_batches: 100
   seed: ${seed}
   log_dir: results/train_magic_point
   data_dir: ${synthetic_dataset}
   train_size: 0.8
   train_batch_size: 64
-  val_batch_size: 16
+  val_batch_size: 64
   num_workers: 12
   augmentation:
     homographic:

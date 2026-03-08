@@ -1,3 +1,4 @@
+import random
 from pathlib import Path
 
 import cv2
@@ -5,12 +6,12 @@ import numpy as np
 import torch
 from lightning import LightningDataModule
 from omegaconf import DictConfig
-from torch.types import Tensor
 from torch.utils.data import DataLoader, Dataset
 
 from src.augmentation import PhotometricAugmentation
 from src.homography.apply import filter_points, homography_scaling_torch, inv_warp_image, warp_points
 from src.homography.homography_utils import compute_valid_mask, sample_homography
+from src.types import Tensor
 
 MAX_PIXEL = 255.0
 
@@ -42,7 +43,7 @@ class SyntheticDataset(Dataset):
         return len(self.image_files)
 
     def __getitem__(self, index: int) -> tuple[Tensor, ...]:
-        src_image = cv2.imread(self.image_files[index], cv2.IMREAD_GRAYSCALE)
+        src_image = cv2.imread(self.image_files[index], cv2.IMREAD_GRAYSCALE)  # type: ignore
         src_points = np.load(self.annot_files[index])
 
         height, width = src_image.shape
@@ -79,8 +80,7 @@ class SyntheticDataset(Dataset):
 
         labels = get_labels(warped_pts, height, width)
 
-        sample = (warped_img, masks, labels)
-        return sample
+        return warped_img, masks, labels
 
 
 class Loader(LightningDataModule):
@@ -93,9 +93,9 @@ class Loader(LightningDataModule):
         self.save_hyperparameters(logger=False)
 
     def train_dataloader(self) -> DataLoader:
-        cfg = self.hparams.cfg
+        cfg = self.hparams.cfg  # type: ignore
         return DataLoader(
-            dataset=self.train_dataset,
+            dataset=self.train_dataset,  # type: ignore
             batch_size=cfg.train_batch_size,
             num_workers=cfg.num_workers,
             drop_last=True,
@@ -103,9 +103,9 @@ class Loader(LightningDataModule):
         )
 
     def val_dataloader(self) -> DataLoader:
-        cfg = self.hparams.cfg
+        cfg = self.hparams.cfg  # type: ignore
         return DataLoader(
-            dataset=self.val_dataset,
+            dataset=self.val_dataset,  # type: ignore
             batch_size=cfg.val_batch_size,
             num_workers=cfg.num_workers,
             shuffle=False,
@@ -116,19 +116,18 @@ class Loader(LightningDataModule):
         if stage == "fit":
             train_files, val_files = self.split_files()
 
-            aug_cfg = self.hparams.cfg.augmentation
+            aug_cfg = self.hparams.cfg.augmentation  # type: ignore
 
             self.train_dataset = SyntheticDataset(train_files, aug_cfg, "train")
             self.val_dataset = SyntheticDataset(val_files, aug_cfg, "val")
 
     def split_files(self) -> tuple[list[Path], list[Path]]:
-        cfg = self.hparams.cfg
+        cfg = self.hparams.cfg  # type: ignore
 
         files = list(Path(cfg.data_dir).glob("**/*.png"))
         files = [cur_file for cur_file in files if cur_file.with_suffix(".npy").exists()]
 
-        rng = np.random.RandomState(cfg.seed)
-        rng.shuffle(files)
+        random.shuffle(files)
 
         train_size = cfg.train_size
         num_train_files = int(len(files) * train_size)

@@ -5,6 +5,11 @@ stages:
     - prepare_synthetic_data
 metrics:
 - models/metrics.json
+- dvclive/metrics.json
 plots:
 - models/plots/metrics:
     x: step
+- dvclive/plots/metrics:
+    x: step
+params:
+- dvclive/params.yaml

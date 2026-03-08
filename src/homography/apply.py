@@ -2,7 +2,8 @@
 
 import torch
 from torch.nn.functional import grid_sample
-from torch.types import Tensor
+
+from src.types import Tensor
 
 TWO = 2.0
 
@@ -119,11 +120,11 @@ def homography_scaling_torch(homography: Tensor, height: int, width: int) -> Ten
     return homography
 
 
-def filter_points(points: Tensor, shape: Tensor, return_mask: bool = False) -> Tensor | tuple[Tensor, Tensor]:
+def filter_points(points: Tensor, shape: Tensor) -> Tensor:
     points = points.float()
     shape = shape.float()
+
     mask = (points >= 0) * (points <= shape - 1)
     mask = torch.prod(mask, dim=-1) == 1
-    if return_mask:
-        return points[mask], mask
+
     return points[mask]

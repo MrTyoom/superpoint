@@ -1,12 +1,10 @@
-from typing import NewType
-
 import cv2
 import numpy as np
 from imgaug import augmenters as iaa
 from numpy.random import rand, randint
 from omegaconf import DictConfig
 
-TupleInt = NewType("TupleInt", tuple[int, int])
+from src.types import TupleInt
 
 
 def get_photometric_augmentation(cfg: DictConfig):
@@ -36,14 +34,14 @@ def get_photometric_augmentation(cfg: DictConfig):
 def get_ellipse_axes(dim: int) -> TupleInt:
     ax = int(max(rand() * dim, dim / 5))
     ay = int(max(rand() * dim, dim / 5))
-    return TupleInt((ax, ay))
+    return ax, ay
 
 
 def get_ellipse_center(img_shape: TupleInt, axes: TupleInt) -> TupleInt:
     max_rad = max(axes)
     x_cord = randint(max_rad, img_shape[1] - max_rad)
     y_cord = randint(max_rad, img_shape[0] - max_rad)
-    return TupleInt((x_cord, y_cord))
+    return x_cord, y_cord
 
 
 def blur_mask(kernel_size_range, mask):
@@ -77,12 +75,12 @@ def generate_mask(cfg: DictConfig, img_shape: TupleInt):
 
         cv2.ellipse(
             mask,
-            get_ellipse_center(img_shape, TupleInt(axes)),
+            get_ellipse_center(img_shape, axes),
             axes,
             np.random.rand() * min_angle,
             0,
             max_angle,
-            color,
+            color,  # type: ignore
             -1,
         )
 
