@@ -134,7 +134,7 @@ class MagicPointLightning(LightningModule):
             heatmap,
             labels,
             masks,
-            self.hparams.detection_threshold,
+            self.hparams.detection_threshold,  # type: ignore
             self.hparams.nms_dist,  # type: ignore
         )
 
