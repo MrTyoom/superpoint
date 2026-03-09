@@ -4,7 +4,7 @@ from torch.nn import BatchNorm2d, BCELoss, Conv2d, MaxPool2d, Module, ReLU
 from torchmetrics import MeanMetric
 
 from src.loss import loss_calculation
-from src.metrics import batch_precision_recall, get_heatmap
+from src.metrics import metric_calculation
 from src.types import Tensor
 
 
@@ -128,18 +128,16 @@ class MagicPointLightning(LightningModule):
         loss = loss_calculation(semi, labels, masks, self._criterion, self.hparams.cell_size)  # type: ignore
         self.val_loss(loss)
 
-        heatmap = get_heatmap(semi)
-
-        precision, recall = batch_precision_recall(
-            heatmap,
+        precision, recall = metric_calculation(
+            semi,
             labels,
             masks,
             self.hparams.detection_threshold,  # type: ignore
             self.hparams.nms_dist,  # type: ignore
         )
 
-        self.val_precision.update(precision)
-        self.val_recall.update(recall)
+        self.val_precision(precision)
+        self.val_recall(recall)
 
     def on_validation_epoch_end(self) -> None:
         avg_loss = self.val_loss.compute()

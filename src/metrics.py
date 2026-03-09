@@ -45,10 +45,11 @@ def calculate_precision_recall(
     return precision, recall
 
 
-def batch_precision_recall(
-    heatmap: Tensor, labels: Tensor, masks: Tensor, detection_threshold: float, nms_dist: int
+def metric_calculation(
+    semi: Tensor, labels: Tensor, masks: Tensor, detection_threshold: float, nms_dist: int
 ) -> tuple[float, float]:
 
+    heatmap = get_heatmap(semi)
     batch_size = heatmap.shape[0]
 
     batch_precision = np.zeros(batch_size)
