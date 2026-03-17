@@ -1,3 +1,7 @@
+import matplotlib
+
+matplotlib.use("Agg")
+
 import rootutils
 import torch
 from dvclive.lightning import DVCLiveLogger

@@ -8,7 +8,7 @@ prepare_synthetic_data:
   blur_size: 21
   background_size: [960, 1280]
   image_size: [120, 160]
-  primitives: 
+  primitives:
     draw_lines: 20_000
     draw_polygon: 20_000
     draw_ellipses: 20_000
@@ -19,19 +19,19 @@ prepare_synthetic_data:
     gaussian_noise: 20_000
 
 train_magicpoint:
-  num_epochs: 300                      # 500
+  num_epochs: 300 # 500
   learning_rate: 0.001
   cell_size: 8
   detection_threshold: 0.001
-  nms_dist: 4 
+  nms_dist: 4
   limit_val_batches: 100
   seed: ${seed}
   log_dir: results/train_magic_point
   data_dir: ${synthetic_dataset}
   train_size: 0.8
-  train_batch_size: 64                 # 128
+  train_batch_size: 64 # 128
   val_batch_size: 64
-  num_workers: 12                      # 16
+  num_workers: 12 # 16
   augmentation:
     homographic:
       allow_artifacts: true
