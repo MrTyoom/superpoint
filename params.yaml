@@ -19,7 +19,7 @@ prepare_synthetic_data:
     gaussian_noise: 20_000
 
 train_magicpoint:
-  num_epochs: 300
+  num_epochs: 300                      # 500
   learning_rate: 0.001
   cell_size: 8
   detection_threshold: 0.001
@@ -29,9 +29,9 @@ train_magicpoint:
   log_dir: results/train_magic_point
   data_dir: ${synthetic_dataset}
   train_size: 0.8
-  train_batch_size: 64
+  train_batch_size: 64                 # 128
   val_batch_size: 64
-  num_workers: 12
+  num_workers: 12                      # 16
   augmentation:
     homographic:
       allow_artifacts: true
@@ -63,6 +63,3 @@ train_magicpoint:
         kernel_size_range: [50, 100]
         transparency_range: [-0.5, 0.8]
         nb_ellipses: 20
-        
-        
-        
