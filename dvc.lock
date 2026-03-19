@@ -2,11 +2,17 @@ schema: '2.0'
 stages:
   prepare_synthetic_data:
     cmd: python scripts/prepare_synthetic_data.py
+    deps:
+    - path: scripts/prepare_synthetic_data.py
+      hash: md5
+      md5: 75583a333fc2145196a898e0d6aa5391
+      size: 33625
     params:
       params.yaml:
         prepare_synthetic_data:
-          seed: ${seed}
-          data_dir: ${synthetic_dataset}
+          seed: 201392110
+          data_dir: data/synthetic_dataset
+          train_size: 0.8
           blur_size: 21
           background_size:
           - 960
@@ -23,3 +29,74 @@ stages:
             draw_stripes: 20000
             draw_cube: 20000
             gaussian_noise: 20000
+    outs:
+    - path: data/synthetic_dataset
+      hash: md5
+      md5: 874346ef8b4c8cb4257f1714aece4da3.dir
+      size: 1063066011
+      nfiles: 320000
+  train_magicpoint:
+    cmd: python src/train_magicpoint.py
+    deps:
+    - path: data/synthetic_dataset
+      hash: md5
+      md5: 874346ef8b4c8cb4257f1714aece4da3.dir
+      size: 1063066011
+      nfiles: 320000
+    params:
+      params.yaml:
+        train_magicpoint:
+          seed: 201392110
+          num_epochs: 300
+          learning_rate: 0.001
+          cell_size: 8
+          detection_threshold: 0.001
+          nms_dist: 4
+          limit_val_batches: 100
+          log_dir: results/train_magic_point
+          data_dir: data/synthetic_dataset
+          train_size: 0.8
+          train_batch_size: 64
+          val_batch_size: 64
+          num_workers: 0
+          augmentation:
+            homographic:
+              allow_artifacts: true
+              max_angle: 1.57
+              patch_ratio: 0.8
+              perspective: true
+              perspective_amplitude_x: 0.2
+              perspective_amplitude_y: 0.2
+              rotation: true
+              scaling: true
+              scaling_amplitude: 0.2
+              translation: true
+              translation_overflow: 0.05
+              n_scales: 5
+              n_angles: 25
+              valid_border_margin: 2
+            photometric:
+              random_brightness:
+                max_abs_change: 75
+              random_contrast:
+                strength_range:
+                - 0.3
+                - 1.8
+              additive_gaussian_noise:
+                stddev_range:
+                - 0
+                - 15
+              additive_speckle_noise:
+                prob_range:
+                - 0
+                - 0.0035
+              motion_blur:
+                max_kernel_size: 7
+              additive_shade:
+                kernel_size_range:
+                - 50
+                - 100
+                transparency_range:
+                - -0.5
+                - 0.8
+                nb_ellipses: 20

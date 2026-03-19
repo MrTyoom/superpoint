@@ -1,6 +1,6 @@
 [core]
     analytics = false
-    autostage = true
+    autostage = false
     remote = storage
 ['remote "storage"']
     url = ssh://avsorokin_3@212.233.77.110/home3/avsorokin_3/superpoint/dvc-storage

@@ -5,6 +5,7 @@ from torch.nn.functional import grid_sample
 
 from src.types import Tensor
 
+
 TWO = 2.0
 
 

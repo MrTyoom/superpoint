@@ -80,7 +80,7 @@ def generate_mask(cfg: DictConfig, img_shape: TupleInt):
             np.random.rand() * min_angle,
             0,
             max_angle,
-            color,  # type: ignore
+            color,
             -1,
         )
 

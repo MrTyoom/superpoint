@@ -31,11 +31,9 @@ def config() -> DictConfig:
 def synthetic_dataset(config: DictConfig) -> SyntheticDataset:
     """Создает датасет для тестов"""
     cfg = config.copy()
-
     data_path = root / cfg["data_dir"]
-    files = list(Path(data_path).glob("**/*.png"))
-    files = [cur_file for cur_file in files if cur_file.with_suffix(".npy").exists()]
-    return SyntheticDataset(files, cfg["augmentation"])
+    
+    return SyntheticDataset(data_path, cfg["augmentation"])
 
 
 def test_dataset_item_shape(synthetic_dataset: SyntheticDataset) -> None:

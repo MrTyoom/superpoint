@@ -6,6 +6,7 @@ from torch.nn.functional import softmax
 from src.train_utils.d2s import SpaceToDepth
 from src.types import Tensor
 
+
 EPS = 1e-8
 
 

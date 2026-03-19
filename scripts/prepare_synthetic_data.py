@@ -1,6 +1,7 @@
 import math
 import os
 import random
+import shutil
 
 import cv2
 import cv2 as cv
@@ -955,15 +956,12 @@ def generate_data(n, out_dir, draw_fn, background_size, image_size, blur_size):
     yx = image_size * np.flip(points, 1) / background_size  # y, x
 
     shape = np.array(image.shape[:2])
+    
     mask = (yx >= 0) * (yx <= shape - 1)
     mask = np.prod(mask, axis=-1) == 1
+    
     yx = yx[mask]
-
     xy = np.flip(yx, 1)  # x, y
-
-    # image = cv2.cvtColor(image, cv2.COLOR_GRAY2BGR)
-    # for x, y in xy.astype(int):
-    #     cv2.circle(image, (x, y), 2, (255, 0, 255), -1)
 
     file = out_dir / str(n).zfill(6)
 
@@ -982,8 +980,8 @@ def main(cfg: DictConfig):
     random_state = np.random.RandomState(cfg.seed)
     random.seed(cfg.seed)
 
-    data_dir = make_dir(cfg.data_dir)
-
+    tmp_dir = make_dir("tmp")
+    
     blur_size = cfg.blur_size
 
     background_size = np.array((960, 1280))
@@ -1002,7 +1000,7 @@ def main(cfg: DictConfig):
             gaussian_noise=gaussian_noise,
         )[name]
 
-        out_dir = make_dir(data_dir / name)
+        out_dir = make_dir(tmp_dir / name)
         n_jobs = os.cpu_count()
 
         with parallel_backend("threading"):
@@ -1013,9 +1011,44 @@ def main(cfg: DictConfig):
                 for n in tqdm(range(size), desc=name, leave=False)
             )
 
+    # split and move dataset
+
+    files = list(tmp_dir.glob("**/*.png"))
+    random.shuffle(files)
+
+    train_size = cfg.train_size
+    num_train_files = int(len(files) * train_size)
+
+    train_files = files[:num_train_files]
+    test_files = files[num_train_files:]
+
+    data_dir = make_dir(cfg.data_dir)
+    
+    train_dir = make_dir(data_dir / "train")
+
+    for n, img_file in enumerate(train_files):
+        if n % 1000 == 0:
+            out_dir = make_dir(train_dir / str(n // 1000).zfill(3))
+
+        stem = out_dir / str(n % 1000).zfill(3)
+
+        shutil.move(img_file, stem.with_suffix(".png"))
+        shutil.move(img_file.with_suffix(".npy"), stem.with_suffix(".npy"))
+    
+    test_dir = make_dir(data_dir / "test")
+    
+    for n, img_file in enumerate(test_files):
+        if n % 1000 == 0:
+            out_dir = make_dir(test_dir / str(n // 1000).zfill(3))
+
+        stem = out_dir / str(n % 1000).zfill(3)
+
+        shutil.move(img_file, stem.with_suffix(".png"))
+        shutil.move(img_file.with_suffix(".npy"), stem.with_suffix(".npy"))
+    
+    shutil.rmtree(tmp_dir)
+
 
 if __name__ == "__main__":
     cfg = OmegaConf.load("params.yaml")
-    cfg = cfg["prepare_synthetic_data"]
-
-    main(cfg)
+    main(cfg.prepare_synthetic_data)

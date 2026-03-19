@@ -1,9 +1,7 @@
 __pycache__
-results/
 tmp/
 .ruff_cache/
 .mypy_cache/
 .pytest_cache/
 .DS_Store
 .venv/
-.vscode/

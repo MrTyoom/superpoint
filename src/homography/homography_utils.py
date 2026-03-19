@@ -21,7 +21,7 @@ def sample_homography(cfg: DictConfig, shape: Array, shift: int) -> tuple[Tensor
     pts1 *= shape[np.newaxis]
     pts2 *= shape[np.newaxis]
 
-    inv_homography = cv2.getPerspectiveTransform(np.float32(pts1 + shift), np.float32(pts2 + shift))  # type: ignore
+    inv_homography = cv2.getPerspectiveTransform(np.float32(pts1 + shift), np.float32(pts2 + shift))
     homography = np.linalg.inv(inv_homography)
 
     homography = torch.tensor(homography).float()
@@ -43,9 +43,9 @@ def compute_valid_mask(
         inv_homography = inv_homography.view(-1, 3, 3)
 
     batch_size = inv_homography.shape[0]
-    mask = torch.ones(batch_size, 1, image_shape[0], image_shape[1]).to(device)  # type: ignore
+    mask = torch.ones(batch_size, 1, image_shape[0], image_shape[1]).to(device)
     mask = inv_warp_image_batch(mask, inv_homography, device=device, mode="nearest")
-    mask = mask.view(batch_size, image_shape[0], image_shape[1])  # type: ignore
+    mask = mask.view(batch_size, image_shape[0], image_shape[1])
     mask = mask.cpu().numpy()
 
     if erosion_radius > 0:

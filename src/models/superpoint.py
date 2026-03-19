@@ -111,7 +111,7 @@ class MagicPointLightning(LightningModule):
         img, masks, labels = sample
         semi = self(img)
 
-        loss = loss_calculation(semi, labels, masks, self._criterion, self.hparams.cell_size)  # type: ignore
+        loss = loss_calculation(semi, labels, masks, self._criterion, self.hparams.cell_size)
         self.train_loss(loss)
 
         return loss
@@ -125,15 +125,15 @@ class MagicPointLightning(LightningModule):
         img, masks, labels = sample
         semi = self(img)
 
-        loss = loss_calculation(semi, labels, masks, self._criterion, self.hparams.cell_size)  # type: ignore
+        loss = loss_calculation(semi, labels, masks, self._criterion, self.hparams.cell_size)
         self.val_loss(loss)
 
         precision, recall = metric_calculation(
             semi,
             labels,
             masks,
-            self.hparams.detection_threshold,  # type: ignore
-            self.hparams.nms_dist,  # type: ignore
+            self.hparams.detection_threshold,
+            self.hparams.nms_dist,
         )
 
         self.val_precision(precision)
@@ -152,6 +152,6 @@ class MagicPointLightning(LightningModule):
         self.val_precision.reset()
         self.val_recall.reset()
 
-    def configure_optimizers(self):  # type: ignore
-        optimizer = torch.optim.Adam(self._net.parameters(), lr=self.hparams.learning_rate)  # type: ignore
+    def configure_optimizers(self):
+        optimizer = torch.optim.Adam(self._net.parameters(), lr=self.hparams.learning_rate)
         return optimizer

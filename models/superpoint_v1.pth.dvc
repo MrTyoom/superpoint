@@ -1,0 +1,5 @@
+outs:
+- md5: 938af9f432d327751dcbc0d6c7a0448b
+  size: 5206086
+  hash: md5
+  path: superpoint_v1.pth

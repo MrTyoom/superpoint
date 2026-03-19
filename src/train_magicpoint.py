@@ -1,7 +1,3 @@
-import matplotlib
-
-matplotlib.use("Agg")
-
 import rootutils
 import torch
 from dvclive.lightning import DVCLiveLogger
@@ -9,15 +5,17 @@ from lightning import Trainer, seed_everything
 from lightning.pytorch.callbacks import ModelCheckpoint, RichProgressBar
 from omegaconf import DictConfig, OmegaConf
 
+
 rootutils.setup_root(__file__, indicator="src", pythonpath=True)
 
 from src.logger import LOG
-from src.superpoint import MagicPointLightning
+from src.models.superpoint import MagicPointLightning
 from src.synthetic_loader import Loader
+
 
 REFRESH_RATE = 50
 
-torch.set_float32_matmul_precision("medium")
+torch.set_float32_matmul_precision("high")
 
 
 def main(cfg: DictConfig) -> None:
@@ -27,14 +25,14 @@ def main(cfg: DictConfig) -> None:
     loader = Loader(cfg)
 
     cfg_dict = OmegaConf.to_container(cfg, resolve=True)
-    model = MagicPointLightning(cfg_dict)  # type: ignore
+    model = MagicPointLightning(cfg_dict)
 
     callbacks = [
         ModelCheckpoint(dirpath=cfg.log_dir, save_top_k=2, monitor="val/precision", mode="max", save_last=True),
         RichProgressBar(refresh_rate=REFRESH_RATE),
     ]
 
-    logger = DVCLiveLogger(prefix="magicpoint", log_model=False)
+    logger = DVCLiveLogger(prefix="magicpoint", log_model=False, dir=cfg.log_dir)
 
     trainer = Trainer(
         max_epochs=cfg.num_epochs,

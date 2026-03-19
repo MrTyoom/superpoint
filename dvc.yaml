@@ -3,13 +3,16 @@ stages:
     cmd: python scripts/prepare_synthetic_data.py
     params:
     - prepare_synthetic_data
-metrics:
-- models/metrics.json
-- dvclive/metrics.json
-plots:
-- models/plots/metrics:
-    x: step
-- dvclive/plots/metrics:
-    x: step
+    deps:
+    - scripts/prepare_synthetic_data.py
+    outs:
+    - ${prepare_synthetic_data.data_dir}
+
+  train_magicpoint:
+    cmd: python src/train_magicpoint.py
+    params:
+    - train_magicpoint
+
 params:
 - dvclive/params.yaml
+- results/train_magic_point/params.yaml

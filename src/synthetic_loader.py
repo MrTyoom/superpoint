@@ -1,4 +1,3 @@
-import random
 from pathlib import Path
 
 import cv2
@@ -13,7 +12,9 @@ from src.homography.apply import filter_points, homography_scaling_torch, inv_wa
 from src.homography.homography_utils import compute_valid_mask, sample_homography
 from src.types import Tensor
 
+
 MAX_PIXEL = 255.0
+TRAIN_MODE = "train"
 
 
 def get_labels(pnts: Tensor, height: int, width: int) -> Tensor:
@@ -30,11 +31,13 @@ def get_labels(pnts: Tensor, height: int, width: int) -> Tensor:
 
 
 class SyntheticDataset(Dataset):
-    def __init__(self, files: list[Path], aug_cfg: DictConfig, mode: str = "train") -> None:
+    def __init__(self, data_dir: Path, aug_cfg: DictConfig, mode: str = TRAIN_MODE) -> None:
         super().__init__()
 
+        files = [fp for fp in Path(data_dir).glob("**/*.png") if fp.with_suffix(".npy").exists()]
+
         self.image_files = files
-        self.annot_files = [cur_file.with_suffix(".npy") for cur_file in files]
+        self.annot_files = [fp.with_suffix(".npy") for fp in files]
 
         self.mode = mode
         self.aug_cfg = aug_cfg
@@ -43,12 +46,12 @@ class SyntheticDataset(Dataset):
         return len(self.image_files)
 
     def __getitem__(self, index: int) -> tuple[Tensor, ...]:
-        src_image = cv2.imread(self.image_files[index], cv2.IMREAD_GRAYSCALE)  # type: ignore
+        src_image = cv2.imread(self.image_files[index], cv2.IMREAD_GRAYSCALE)
         src_points = np.load(self.annot_files[index])
 
         height, width = src_image.shape
 
-        if self.mode == "train":
+        if self.mode == TRAIN_MODE:
             aug = PhotometricAugmentation(self.aug_cfg.photometric)
             src_image = aug(src_image)
 
@@ -68,15 +71,15 @@ class SyntheticDataset(Dataset):
 
         warped_pts = filter_points(warped_pts, torch.tensor([width, height]))
 
-        if self.mode == "val":
-            masks = torch.ones(height, width)
-            masks = masks.unsqueeze(0)
-        else:
+        if self.mode == TRAIN_MODE:
             masks = compute_valid_mask(
                 torch.tensor([height, width]),
                 inv_homography=inv_homography,
                 erosion_radius=self.aug_cfg.homographic.valid_border_margin,
             )
+        else:
+            masks = torch.ones(height, width)
+            masks = masks.unsqueeze(0)
 
         labels = get_labels(warped_pts, height, width)
 
@@ -93,9 +96,9 @@ class Loader(LightningDataModule):
         self.save_hyperparameters(logger=False)
 
     def train_dataloader(self) -> DataLoader:
-        cfg = self.hparams.cfg  # type: ignore
+        cfg = self.hparams.cfg
         return DataLoader(
-            dataset=self.train_dataset,  # type: ignore
+            dataset=self.train_dataset,
             batch_size=cfg.train_batch_size,
             num_workers=cfg.num_workers,
             drop_last=True,
@@ -103,9 +106,9 @@ class Loader(LightningDataModule):
         )
 
     def val_dataloader(self) -> DataLoader:
-        cfg = self.hparams.cfg  # type: ignore
+        cfg = self.hparams.cfg
         return DataLoader(
-            dataset=self.val_dataset,  # type: ignore
+            dataset=self.val_dataset,
             batch_size=cfg.val_batch_size,
             num_workers=cfg.num_workers,
             shuffle=False,
@@ -114,22 +117,8 @@ class Loader(LightningDataModule):
 
     def setup(self, stage: str) -> None:
         if stage == "fit":
-            train_files, val_files = self.split_files()
+            data_dir = Path(self.hparams.cfg.data_dir)
+            aug_cfg = self.hparams.cfg.augmentation
 
-            aug_cfg = self.hparams.cfg.augmentation  # type: ignore
-
-            self.train_dataset = SyntheticDataset(train_files, aug_cfg, "train")
-            self.val_dataset = SyntheticDataset(val_files, aug_cfg, "val")
-
-    def split_files(self) -> tuple[list[Path], list[Path]]:
-        cfg = self.hparams.cfg  # type: ignore
-
-        files = list(Path(cfg.data_dir).glob("**/*.png"))
-        files = [cur_file for cur_file in files if cur_file.with_suffix(".npy").exists()]
-
-        random.shuffle(files)
-
-        train_size = cfg.train_size
-        num_train_files = int(len(files) * train_size)
-
-        return files[:num_train_files], files[num_train_files:]
+            self.train_dataset = SyntheticDataset(data_dir / "train", aug_cfg, "train")
+            self.val_dataset = SyntheticDataset(data_dir / "test", aug_cfg, "val")
