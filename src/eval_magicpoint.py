@@ -15,6 +15,7 @@ rootutils.setup_root(__file__, indicator="src", pythonpath=True)
 
 from src.common import make_dir
 from src.logger import LOG
+from src.metrics import get_heatmap
 from src.models.superpoint import SuperPoint
 
 # reference model:
@@ -22,6 +23,7 @@ from src.models.superpoint import SuperPoint
 # weights can be downloded from:
 # https://github.com/magicleap/SuperPointPretrainedNetwork/blob/master/superpoint_v1.pth
 from src.models.superpoint_reference import SuperPointReference
+from src.train_utils.train_utils import get_pts_from_heatmap
 
 
 MAX_PIXEL = 255
@@ -55,128 +57,6 @@ class DataSet(Dataset):
         return image, label
 
 
-class DepthToSpace(torch.nn.Module):
-    def __init__(self, block_size=8):
-        super().__init__()
-        self.block_size = block_size
-        self.block_size_sq = block_size * block_size
-
-    def forward(self, input):
-        output = input.permute(0, 2, 3, 1)
-        batch_size, d_height, d_width, d_depth = output.size()
-
-        s_depth = int(d_depth / self.block_size_sq)
-        s_width = int(d_width * self.block_size)
-        s_height = int(d_height * self.block_size)
-
-        tiles = output.reshape(batch_size, d_height, d_width, self.block_size_sq, s_depth)
-        tiles = tiles.split(self.block_size, 3)
-
-        stack = [ts.reshape(batch_size, d_height, s_width, s_depth) for ts in tiles]
-
-        output = torch.stack(stack, 0)
-        output = output.transpose(0, 1)
-        output = output.permute(0, 2, 1, 3, 4)
-        output = output.reshape(batch_size, s_height, s_width, s_depth)
-        output = output.permute(0, 3, 1, 2)
-
-        return output
-
-
-def nms_fast(in_corners, height, width, dist_thresh):
-    grid = np.zeros((height, width)).astype(int)  # Track NMS data.
-    inds = np.zeros((height, width)).astype(int)  # Store indices of points.
-
-    # Sort by confidence and round to nearest int.
-    inds1 = np.argsort(-in_corners[2, :])
-    corners = in_corners[:, inds1]
-    rcorners = corners[:2, :].round().astype(int)  # Rounded corners.
-
-    # Check for edge case of 0 or 1 corners.
-    if rcorners.shape[1] == 0:
-        return np.zeros((3, 0)).astype(int), np.zeros(0).astype(int)
-
-    if rcorners.shape[1] == 1:
-        out = np.vstack((rcorners, in_corners[2])).reshape(3, 1)
-        return out, np.zeros((1)).astype(int)
-
-    # Initialize the grid.
-    for it, rc in enumerate(rcorners.T):
-        grid[rcorners[1, it], rcorners[0, it]] = 1
-        inds[rcorners[1, it], rcorners[0, it]] = it
-
-    # Pad the border of the grid, so that we can NMS points near the border.
-    pad = dist_thresh
-    grid = np.pad(grid, ((pad, pad), (pad, pad)), mode="constant")
-
-    # Iterate through points, highest to lowest conf, suppress neighborhood.
-    count = 0
-
-    for rc in rcorners.T:
-        # Account for top and left padding.
-        pt = (rc[0] + pad, rc[1] + pad)
-
-        if grid[pt[1], pt[0]] == 1:  # If not yet suppressed.
-            y1 = pt[1] - pad
-            y2 = pt[1] + pad + 1
-            x1 = pt[0] - pad
-            x2 = pt[0] + pad + 1
-            grid[y1:y2, x1:x2] = 0
-            grid[pt[1], pt[0]] = -1
-            count += 1
-
-    # Get all surviving -1's and return sorted array of remaining corners.
-    keepy, keepx = np.where(grid == -1)
-    keepy, keepx = keepy - pad, keepx - pad
-
-    inds_keep = inds[keepy, keepx]
-    out = corners[:, inds_keep]
-    inds2 = np.argsort(-out[-1, :])
-    out = out[:, inds2]
-    out_inds = inds1[inds_keep[inds2]]
-
-    return out, out_inds
-
-
-def get_points(heatmap, conf_thresh=0.015, nms_dist=4):
-    height, width = heatmap.shape
-    xs, ys = np.where(heatmap >= conf_thresh)  # Confidence threshold.
-
-    if len(xs) == 0:
-        return np.zeros((0,)), np.zeros((0,))
-
-    pts = np.zeros((3, len(xs)))  # Populate point data sized 3xN.
-
-    pts[0, :] = ys
-    pts[1, :] = xs
-    pts[2, :] = heatmap[xs, ys]
-
-    pts, _ = nms_fast(pts, height, width, dist_thresh=nms_dist)  # Apply NMS.
-    inds = np.argsort(pts[2, :])
-
-    pts = pts[:, inds[::-1]]  # Sort by confidence.
-
-    # Remove points along border.
-    bord = 4
-
-    ok1 = pts[0, :] < bord
-    ok2 = pts[0, :] >= (width - bord)
-    toremoveW = np.logical_or(ok1, ok2)
-
-    ok1 = pts[1, :] < bord
-    ok2 = pts[1, :] >= (height - bord)
-    toremoveH = np.logical_or(ok1, ok2)
-
-    toremove = np.logical_or(toremoveW, toremoveH)
-
-    pts = pts[:, ~toremove]
-
-    xs = pts[0, :].astype(int)
-    ys = pts[1, :].astype(int)
-
-    return xs, ys
-
-
 def load_reference_model(model_file):
     model = SuperPointReference()
 
@@ -207,12 +87,6 @@ def load_model(model_file):
         raise NotImplementedError
 
     return model
-
-
-def get_heatmap(semi):
-    prob = torch.nn.functional.softmax(semi, dim=1)
-    heatmap = DepthToSpace(8)(prob[:, :-1, :, :])
-    return heatmap.squeeze(1).cpu()
 
 
 def calc_metrics(x_coords, y_coords, hmap, labl):
@@ -253,7 +127,7 @@ def main(cfg):
     model = load_model(cfg.checkpoint)
     model = model.eval().to(device)
 
-    output_dir = None if cfg.output_dir is None else make_dir(cfg.output_dir)
+    output_dir = None if cfg.output_dir is None else make_dir(cfg.output_dir, delete_if_exist=True)
     count = 0
 
     precisions = []
@@ -263,10 +137,12 @@ def main(cfg):
         batch = images.unsqueeze(1).float().to(device, non_blocking=is_cuda) / MAX_PIXEL
 
         semi, _ = model(batch)
-        heatmap = get_heatmap(semi)
+        heatmap = get_heatmap(semi).squeeze(1).cpu()
 
         for hmap, imag, labl in zip(heatmap.numpy(), images.numpy(), labels.numpy()):
-            x_coords, y_coords = get_points(hmap)
+            coords = get_pts_from_heatmap(hmap, conf_thresh=cfg.detection_threshold, nms_dist=cfg.nms_dist)
+            x_coords = coords[0, :].astype(int)
+            y_coords = coords[1, :].astype(int)
             precision, recall, pred, targ = calc_metrics(x_coords, y_coords, hmap, labl)
 
             precisions.append(precision)

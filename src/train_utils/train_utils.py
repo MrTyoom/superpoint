@@ -1,12 +1,22 @@
+import cv2
 import numpy as np
 
-from src.types import Array
+from src.types import Array, Tensor
+
+
+def to_numpy(tensor: Tensor) -> Array:
+    return tensor.detach().cpu().numpy()
+
+
+def save_img(img, filename):
+    img = img.astype(np.uint8)
+    cv2.imwrite(filename, img)
 
 
 def get_pts_from_heatmap(heatmap: Array, conf_thresh: float, nms_dist: int) -> Array:
     border_remove = 4
 
-    width, width = heatmap.shape[0], heatmap.shape[1]
+    height, width = heatmap.shape[0], heatmap.shape[1]
     xs, ys = np.where(heatmap >= conf_thresh)  # Confidence threshold.
 
     if len(xs) == 0:
@@ -17,7 +27,7 @@ def get_pts_from_heatmap(heatmap: Array, conf_thresh: float, nms_dist: int) -> A
     pts[1, :] = xs
     pts[2, :] = heatmap[xs, ys]
 
-    pts, _ = nms_fast(pts, width, width, dist_thresh=nms_dist)  # Apply NMS.
+    pts, _ = nms_fast(pts, height, width, dist_thresh=nms_dist)  # Apply NMS.
 
     inds = np.argsort(pts[2, :])
     pts = pts[:, inds[::-1]]  # Sort by confidence.
@@ -26,7 +36,7 @@ def get_pts_from_heatmap(heatmap: Array, conf_thresh: float, nms_dist: int) -> A
     bord = border_remove
 
     width_bord = pts[0, :] >= (width - bord)
-    height_bord = pts[1, :] >= (width - bord)
+    height_bord = pts[1, :] >= (height - bord)
 
     toremoveW = np.logical_or(pts[0, :] < bord, width_bord)
     toremoveH = np.logical_or(pts[1, :] < bord, height_bord)

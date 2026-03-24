@@ -94,8 +94,8 @@ def warp_points(points: Tensor, homographies: Tensor, device: torch.device | str
 
     # homogen coords
     all_ones = torch.ones((points.shape[0], 1)).to(device)
-    points = torch.cat((points.float(), all_ones), dim=1)
     points = points.to(device)
+    points = torch.cat((points.float(), all_ones), dim=1)
 
     # (B, 3, 3) -> (Bx3, 3)
     homographies = homographies.view(batch_size * 3, 3)

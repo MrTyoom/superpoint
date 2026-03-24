@@ -15,12 +15,28 @@ prepare_synthetic_data:
     draw_cube: 20_000
     gaussian_noise: 20_000
 
+homography:_config: &homography_config
+  allow_artifacts: true
+  max_angle: 1.57
+  patch_ratio: 0.8
+  perspective: true
+  perspective_amplitude_x: 0.2
+  perspective_amplitude_y: 0.2
+  rotation: true
+  scaling: true
+  scaling_amplitude: 0.2
+  translation: true
+  translation_overflow: 0.05
+  n_scales: 5
+  n_angles: 25
+  valid_border_margin: 2
+
 train_magicpoint:
   seed: 0xC00FFEE
   num_epochs: 300 # 500
   learning_rate: 0.001
   cell_size: 8
-  detection_threshold: 0.001
+  detection_threshold: 0.015
   nms_dist: 4
   limit_val_batches: 100
   log_dir: results/train_magic_point
@@ -30,21 +46,7 @@ train_magicpoint:
   val_batch_size: 64
   num_workers: 12 # 16
   augmentation:
-    homographic:
-      allow_artifacts: true
-      max_angle: 1.57
-      patch_ratio: 0.8
-      perspective: true
-      perspective_amplitude_x: 0.2
-      perspective_amplitude_y: 0.2
-      rotation: true
-      scaling: true
-      scaling_amplitude: 0.2
-      translation: true
-      translation_overflow: 0.05
-      n_scales: 5
-      n_angles: 25
-      valid_border_margin: 2
+    homographic: *homography_config
     photometric:
       random_brightness:
         max_abs_change: 75
@@ -66,3 +68,34 @@ eval_magicpoint:
   checkpoint: models/magic_point.ckpt # models/superpoint_v1.pth
   batch_size: 256
   output_dir: tmp
+  detection_threshold: 0.015
+  nms_dist: 4
+
+homographic_adaptation:
+  output_dir: data/homo_adapt
+  checkpoint: models/magic_point.ckpt # models/superpoint_v1.pth
+  data_dir: data/satellite
+  num: 100
+  top_k: 600
+  detection_threshold: 0.015
+  nms_dist: 4
+  homographic: *homography_config
+
+prepare_satellite_data:
+  data_dir: data/satellite
+  max_workers: 12
+  zoom: 17 # zoom 17 соответствует примерно 1 px / m
+  num_tiles: 10 # число тайлов по ширине и высоте изображения
+  tile_size: 256 # размер тайла в пикселях
+  dataset_dir: data/dataset
+  map_box: ## Координаты, ограничивающие выбранную область
+    - 36.90000 # min_lon
+    - 55.38000 # min_lat
+    - 38.00000 # max_lon
+    - 56.00000 # max_lat
+  osm: data/map.osm.pbf
+  sources: ## TMS сервисы
+    google: "http://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}"
+    bing: "http://a0.ortho.tiles.virtualearth.net/tiles/a{}.jpeg?g=2"
+    arcgis: "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
+    yandex: "https://sat04.maps.yandex.net/tiles?l=sat&x={x}&y={y}&z={z}"

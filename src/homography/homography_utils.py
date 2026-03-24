@@ -11,6 +11,9 @@ from src.homography.transforms import perspective_transform
 from src.types import Array, Tensor
 
 
+EPS = 1e-7
+
+
 def sample_homography(cfg: DictConfig, shape: Array, shift: int) -> tuple[Tensor, Tensor]:
     """
     Генерирует случайную гомографию
@@ -54,3 +57,15 @@ def compute_valid_mask(
             mask[el_ind, :, :] = cv2.erode(mask[el_ind, :, :], kernel, iterations=1)
 
     return torch.tensor(mask).to(device)
+
+
+def homography_adaptation(heatmap, inv_homographies, mask_two_dim, device):
+    heatmap *= mask_two_dim
+
+    warped_heatmap = inv_warp_image_batch(heatmap, inv_homographies, device=device, mode="bilinear")
+    warped_mask = inv_warp_image_batch(mask_two_dim, inv_homographies, device=device, mode="bilinear")
+
+    sum_heatmap = torch.sum(warped_heatmap, dim=0)
+    sum_mask = torch.sum(warped_mask, dim=0)
+
+    return sum_heatmap / torch.clamp(sum_mask, min=EPS)

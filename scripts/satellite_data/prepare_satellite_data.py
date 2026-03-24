@@ -335,6 +335,8 @@ def main(cfg: DictConfig):
             if image is not None:
                 image.save(file)
                 print(file)
+
+                break
             
 
 if __name__ == "__main__":
