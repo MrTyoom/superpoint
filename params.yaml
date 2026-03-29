@@ -75,6 +75,7 @@ homographic_adaptation:
   output_dir: data/homo_adapt
   checkpoint: models/magic_point.ckpt # models/superpoint_v1.pth
   data_dir: data/satellite
+  max_workers: 12
   num: 100
   top_k: 600
   detection_threshold: 0.015
@@ -82,17 +83,19 @@ homographic_adaptation:
   homographic: *homography_config
 
 prepare_satellite_data:
-  data_dir: data/satellite
+  seed: 0xC00FFEE
+  data_dir: data/satellite/17
+  out_dir: data/satellite_data
   max_workers: 12
+  tiles_need: 625
   zoom: 17 # zoom 17 соответствует примерно 1 px / m
   num_tiles: 10 # число тайлов по ширине и высоте изображения
   tile_size: 256 # размер тайла в пикселях
-  dataset_dir: data/dataset
-  map_box: ## Координаты, ограничивающие выбранную область
-    - 36.90000 # min_lon
-    - 55.38000 # min_lat
+  map_box:
+    - 37.56000 # min_lon
+    - 55.71500 # min_lat
     - 38.00000 # max_lon
-    - 56.00000 # max_lat
+    - 56.35000 # max_lat
   osm: data/map.osm.pbf
   sources: ## TMS сервисы
     google: "http://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}"
