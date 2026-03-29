@@ -285,10 +285,13 @@ def main(cfg: DictConfig):
 
     for service, source in cfg.sources.items():
         print(f"TMS service: {service}")
-
+        cnt = 0
+        
         for X, Y in product(range(X1, X2, cfg.num_tiles)[:-1], range(Y1, Y2, cfg.num_tiles)[:-1]):
             # генерация изображения
-
+            if cnt == cfg.tiles_need:
+                break
+            
             x1, x2 = X, X + cfg.num_tiles
             y1, y2 = Y, Y + cfg.num_tiles
 
@@ -334,9 +337,8 @@ def main(cfg: DictConfig):
 
             if image is not None:
                 image.save(file)
+                cnt += 1
                 print(file)
-
-                break
             
 
 if __name__ == "__main__":
