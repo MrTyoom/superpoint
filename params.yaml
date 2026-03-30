@@ -74,7 +74,7 @@ eval_magicpoint:
 homographic_adaptation:
   output_dir: data/homo_adapt
   checkpoint: models/magic_point.ckpt # models/superpoint_v1.pth
-  data_dir: data/satellite
+  data_dir: data/satellite_data
   max_workers: 12
   num: 100
   top_k: 600
