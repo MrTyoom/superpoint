@@ -1,4 +1,3 @@
-import os
 from pathlib import Path
 
 import cv2
@@ -25,7 +24,7 @@ MAX_PIXEL = 255
 
 
 class DataSet(Dataset):
-    def __init__(self, data_dir: Path, aug_cfg: DictConfig, num_homographies: int = 1):
+    def __init__(self, data_dir: Path, aug_cfg: DictConfig, num_homographies: int = 50):
         super().__init__()
 
         files = [fp for fp in Path(data_dir).glob("**/*.jpg")]
@@ -47,10 +46,17 @@ class DataSet(Dataset):
         inv_homographies = []
         masks = []
 
-        for _ in range(self.num_homographies):
-            homography, inv_homography = sample_homography(self.aug_cfg, np.array([2, 2]), shift=-1)
+        # Indentity homography
+        img = torch.from_numpy(src_image).float() / MAX_PIXEL
 
-            img = torch.from_numpy(src_image).float() / MAX_PIXEL
+        warped_images.append(img.unsqueeze(0))
+        inv_homographies.append(torch.eye(3))
+
+        mask = torch.ones((1, height, width))
+        masks.append(mask)
+
+        for _ in range(self.num_homographies - 1):
+            homography, inv_homography = sample_homography(self.aug_cfg, np.array([2, 2]), shift=-1)
 
             warped = inv_warp_image(img.squeeze(), inv_homography, mode="bilinear").unsqueeze(0)
 
@@ -100,7 +106,7 @@ def main(cfg):
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     is_cuda = device.type == "cuda"
 
-    save_npz = None if cfg.output_dir is None else make_dir(Path(cfg.output_dir) / "keypoints", delete_if_exist=True)
+    save_npy = None if cfg.output_dir is None else make_dir(Path(cfg.output_dir) / "keypoints", delete_if_exist=True)
     save_vis = (
         None if cfg.output_dir is None else make_dir(Path(cfg.output_dir) / "visualizations", delete_if_exist=True)
     )
@@ -108,7 +114,7 @@ def main(cfg):
     loader = DataLoader(
         DataSet(cfg.data_dir, cfg.homographic),
         batch_size=1,
-        num_workers=os.cpu_count(),
+        num_workers=cfg.max_workers,
         shuffle=False,
         drop_last=False,
         pin_memory=is_cuda,
@@ -126,7 +132,7 @@ def main(cfg):
 
         outputs = homography_adaptation(heatmap, inv_homo.squeeze(0), masks.squeeze(0), device="cpu")
         pts = get_pts_from_heatmap(
-            outputs.detach().cpu().squeeze(), conf_thresh=cfg.detection_threshold, nms_dist=cfg.nms_dist
+            outputs.detach().cpu().squeeze() * MAX_PIXEL, conf_thresh=cfg.detection_threshold, nms_dist=cfg.nms_dist
         )
 
         # subpixel enable
@@ -139,8 +145,8 @@ def main(cfg):
             pts = pts[: cfg.top_k, :]
 
         file_idx = idx + 1
-        npz_path = save_npz / f"{file_idx}.npz"
-        np.savez_compressed(npz_path, pts=pts)
+        npy_path = save_npy / f"{file_idx}.npy"
+        np.save(npy_path, pts)
 
         pts_src = pts[:, :2]
         img_pts = draw_keypoints(src_img.numpy().squeeze() * MAX_PIXEL, pts_src.squeeze())

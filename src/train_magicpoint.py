@@ -10,7 +10,7 @@ rootutils.setup_root(__file__, indicator="src", pythonpath=True)
 
 from src.logger import LOG
 from src.models.superpoint import MagicPointLightning
-from src.synthetic_loader import Loader
+from src.synthetic_loader import Loader, SyntheticDataset
 
 
 REFRESH_RATE = 50
@@ -23,6 +23,7 @@ def main(cfg: DictConfig) -> None:
     seed_everything(cfg.seed)
 
     loader = Loader(cfg)
+    loader.setup(stage="fit", CurDataset=SyntheticDataset)
 
     cfg_dict = OmegaConf.to_container(cfg, resolve=True)
     model = MagicPointLightning(cfg_dict)

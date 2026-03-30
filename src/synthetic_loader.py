@@ -115,10 +115,10 @@ class Loader(LightningDataModule):
             pin_memory=torch.cuda.is_available(),
         )
 
-    def setup(self, stage: str) -> None:
+    def setup(self, stage: str, CurDataset: Dataset) -> None:
         if stage == "fit":
             data_dir = Path(self.hparams.cfg.data_dir)
             aug_cfg = self.hparams.cfg.augmentation
 
-            self.train_dataset = SyntheticDataset(data_dir / "train", aug_cfg, "train")
-            self.val_dataset = SyntheticDataset(data_dir / "test", aug_cfg, "val")
+            self.train_dataset = CurDataset(data_dir / "train", aug_cfg, "train")
+            self.val_dataset = CurDataset(data_dir / "test", aug_cfg, "val")
