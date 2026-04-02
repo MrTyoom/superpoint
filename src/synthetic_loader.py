@@ -87,8 +87,9 @@ class SyntheticDataset(Dataset):
 
 
 class Loader(LightningDataModule):
-    def __init__(self, cfg: DictConfig) -> None:
+    def __init__(self, cfg: DictConfig, dataset_class: Dataset) -> None:
         super().__init__()
+        self.dataset_class = dataset_class
 
         self.train_dataset: Dataset | None = None
         self.val_dataset: Dataset | None = None
@@ -115,10 +116,10 @@ class Loader(LightningDataModule):
             pin_memory=torch.cuda.is_available(),
         )
 
-    def setup(self, stage: str, CurDataset: Dataset) -> None:
+    def setup(self, stage: str) -> None:
         if stage == "fit":
             data_dir = Path(self.hparams.cfg.data_dir)
             aug_cfg = self.hparams.cfg.augmentation
 
-            self.train_dataset = CurDataset(data_dir / "train", aug_cfg, "train")
-            self.val_dataset = CurDataset(data_dir / "test", aug_cfg, "val")
+            self.train_dataset = self.dataset_class(data_dir / "train", aug_cfg, "train")
+            self.val_dataset = self.dataset_class(data_dir / "test", aug_cfg, "val")

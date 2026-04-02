@@ -22,8 +22,7 @@ def main(cfg: DictConfig) -> None:
     LOG.info("set seed: {0}".format(cfg.seed))
     seed_everything(cfg.seed)
 
-    loader = Loader(cfg)
-    loader.setup(stage="fit", CurDataset=SyntheticDataset)
+    loader = Loader(cfg, SyntheticDataset)
 
     cfg_dict = OmegaConf.to_container(cfg, resolve=True)
     model = MagicPointLightning(cfg_dict)
