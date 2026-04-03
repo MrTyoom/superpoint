@@ -1,10 +1,10 @@
 import torch
 from omegaconf import DictConfig
 
-from src.types import Tensor
+from src.types import Tensor, TupleInt
 
 
-def get_perspective_transform(points_src, points_dst):
+def get_perspective_transform(points_src: Tensor, points_dst: Tensor) -> Tensor:
     dtype = points_src.dtype
     device = points_src.device
     # create the lhs tensor with shape # Bx8x8
@@ -36,7 +36,7 @@ def get_perspective_transform(points_src, points_dst):
     return perspective.view(-1, 3, 3)  # Bx3x3
 
 
-def normal_transform_pixel(height, width, device, eps=1e-14):
+def normal_transform_pixel(height: int, width: int, device: torch.device, eps: float = 1e-14) -> Tensor:
     vec = [[1, 0, -1], [0, 1, -1], [0, 0, 1]]
     tr_mat = torch.tensor(vec, device=device, dtype=torch.float)
 
@@ -50,7 +50,7 @@ def normal_transform_pixel(height, width, device, eps=1e-14):
     return tr_mat.unsqueeze(0)  # 1x3x3
 
 
-def normalize_homography(homography, dsize_src, dsize_dst):
+def normalize_homography(homography: Tensor, dsize_src: TupleInt, dsize_dst: TupleInt) -> Tensor:
     # source and destination sizes
     src_h, src_w = dsize_src
     dst_h, dst_w = dsize_dst
