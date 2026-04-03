@@ -1,5 +1,5 @@
 prepare_synthetic_data:
-  seed: 0xC00FFEE
+  seed: 0xC0FFEE
   data_dir: data/synthetic_dataset
   train_size: 0.8
   blur_size: 21
@@ -15,24 +15,8 @@ prepare_synthetic_data:
     draw_cube: 20_000
     gaussian_noise: 20_000
 
-homography:_config: &homography_config
-  allow_artifacts: true
-  max_angle: 1.57
-  patch_ratio: 0.8
-  perspective: true
-  perspective_amplitude_x: 0.2
-  perspective_amplitude_y: 0.2
-  rotation: true
-  scaling: true
-  scaling_amplitude: 0.2
-  translation: true
-  translation_overflow: 0.05
-  n_scales: 5
-  n_angles: 25
-  valid_border_margin: 2
-
 train_magicpoint:
-  seed: 0xC00FFEE
+  seed: 0xC0FFEE
   num_epochs: 300 # 500
   learning_rate: 0.001
   cell_size: 8
@@ -46,7 +30,22 @@ train_magicpoint:
   val_batch_size: 64
   num_workers: 12 # 16
   augmentation:
-    homographic: *homography_config
+    homographic: 
+      allow_artifacts: true
+      max_angle: 1.57
+      patch_ratio: 0.8
+      perspective: true
+      perspective_amplitude_x: 0.2
+      perspective_amplitude_y: 0.2
+      rotation: true
+      scaling: true
+      scaling_amplitude: 0.2
+      translation: true
+      translation_overflow: 0.05
+      n_scales: 5
+      n_angles: 25
+      valid_border_margin: 2
+
     photometric:
       random_brightness:
         max_abs_change: 75
@@ -71,34 +70,61 @@ eval_magicpoint:
   detection_threshold: 0.015
   nms_dist: 4
 
-homographic_adaptation:
-  output_dir: data/homo_adapt
-  checkpoint: models/magic_point.ckpt # models/superpoint_v1.pth
-  data_dir: data/satellite_data
+download_satellite_data:
+  data_dir: data/satellite
   max_workers: 12
-  num: 100
-  top_k: 600
-  detection_threshold: 0.015
-  nms_dist: 4
-  homographic: *homography_config
-
-prepare_satellite_data:
-  seed: 0xC00FFEE
-  data_dir: data/satellite/17
-  out_dir: data/satellite_data
-  max_workers: 12
-  tiles_need: 625
+  tiles_need: 10 # 625
   zoom: 17 # zoom 17 соответствует примерно 1 px / m
-  num_tiles: 10 # число тайлов по ширине и высоте изображения
+  num_tiles: 30 # 10 # число тайлов по ширине и высоте изображения
   tile_size: 256 # размер тайла в пикселях
   map_box:
     - 37.56000 # min_lon
     - 55.71500 # min_lat
     - 38.00000 # max_lon
     - 56.35000 # max_lat
-  osm: data/map.osm.pbf
+  #osm: data/map.osm.pbf
   sources: ## TMS сервисы
     google: "http://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}"
     bing: "http://a0.ortho.tiles.virtualearth.net/tiles/a{}.jpeg?g=2"
     arcgis: "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
     yandex: "https://sat04.maps.yandex.net/tiles?l=sat&x={x}&y={y}&z={z}"
+
+prepare_satellite_images:
+  seed: 0xC0FFEE
+  satellite_dir: data/satellite
+  # размер спутниковых изображений
+  crop_size: 480
+  images_dir: data/satellite_images
+
+export_points:
+  seed: 0xC0FFEE
+  magic_point_model: models/magic_point.ckpt
+  images_dir: data/satellite_images
+  # размер спутниковых изображений
+  crop_size: 480
+  # размер ядра сглаживания изображений
+  blur_size: 3
+  # параметры детектирования ключевых точек
+  detection_threshold: 0.001
+  nms_dist: 4
+  # batch size
+  batch_size: 50
+  # параметры аугментации
+  augmentation:
+    # минимальный и максимальный угол поворота в градусах
+    min_angle: 0
+    max_angle: 360
+    # максимальный и минимальный сдвиг точек в аффинном преобразовании в процентах
+    min_shift: -0.1
+    max_shift: 0.1
+    # диапазон изменения яркости в цветовой аугментации
+    min_brightness: 0.7
+    max_brightness: 1.3
+    # диапазон изменения контрастности в цветовой аугментации
+    min_contrast: 0.7
+    max_contrast: 1.3
+  # если debug_dir не null, в неё будут сохраняться отладочные изображения
+  debug_dir: ./tmp # null
+
+
+  

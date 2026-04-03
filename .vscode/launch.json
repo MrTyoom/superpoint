@@ -24,6 +24,30 @@
             "program": "src/eval_magicpoint.py",
             "console": "integratedTerminal",
             "justMyCode": false
+        },
+        {
+            "name": "download_satellite_data",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "scripts/download_satellite_data.py",
+            "console": "integratedTerminal",
+            "justMyCode": false
+        },
+        {
+            "name": "prepare_satellite_images",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "scripts/prepare_satellite_images.py",
+            "console": "integratedTerminal",
+            "justMyCode": false
+        },
+        {
+            "name": "export_points",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "scripts/export_points.py",
+            "console": "integratedTerminal",
+            "justMyCode": false
         }
     ]
 }

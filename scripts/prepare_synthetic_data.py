@@ -980,7 +980,7 @@ def main(cfg: DictConfig):
     random_state = np.random.RandomState(cfg.seed)
     random.seed(cfg.seed)
 
-    tmp_dir = make_dir("tmp")
+    tmp_dir = make_dir("tmp", delete_if_exist=True)
     
     blur_size = cfg.blur_size
 

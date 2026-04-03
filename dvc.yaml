@@ -13,6 +13,21 @@ stages:
     params:
     - train_magicpoint
 
+  download_satellite_data:
+    cmd: python scripts/download_satellite_data.py
+    params:
+    - download_satellite_data
+
+  prepare_satellite_images:
+    cmd: python scripts/prepare_satellite_images.py
+    params:
+    - prepare_satellite_images
+
+  export_points:
+    cmd: python src/export_points.py
+    params:
+    - export_points
+
 params:
 - dvclive/params.yaml
 - results/train_magic_point/params.yaml
