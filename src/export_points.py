@@ -71,9 +71,8 @@ def main(cfg):
         image = cv2.imread(image_file, cv2.IMREAD_GRAYSCALE)
         blur_image = cv2.blur(image, (cfg.blur_size, cfg.blur_size))
 
-        # нормализация изображения
+        # нормализация изображения и создание батча - копий одного изображения (B x C x H x W)
         batch = torch.tensor(blur_image, dtype=torch.float, device=device).unsqueeze(0)
-        # создание батча - копий одного изображения (B x C x H x W)
         batch = torch.repeat_interleave(batch / MAX_PIXEL_VALUE, cfg.batch_size, dim=0).unsqueeze(1)
 
         # геометрическая и цветовая аугментация батча
@@ -85,9 +84,7 @@ def main(cfg):
 
         # постобработка для получения тепловых карт ключевых точек
         heatmaps = get_heatmap(semi)
-
         # обратное геометрическое преобразование тепловых карт
-        # heatmaps = torch.grid_sampler(heatmaps, grid, 0, 0, align_corners=True)
         heatmaps = augmentation.warp(heatmaps)
         # усреднение тепловых карт (homography adaptation)
         heatmap = torch.mean(heatmaps, dim=0).squeeze()  # H x W
