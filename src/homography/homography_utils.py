@@ -3,16 +3,18 @@
 import cv2
 import numpy as np
 import torch
-from numpy.typing import NDArray
 from omegaconf import DictConfig
-from torch.types import Tensor
 
 from src.homography.apply import inv_warp_image_batch
 from src.homography.generation import get_corners
 from src.homography.transforms import perspective_transform
+from src.types import Array, Tensor
 
 
-def sample_homography(cfg: DictConfig, shape: NDArray, shift: int) -> tuple[Tensor, Tensor]:
+EPS = 1e-7
+
+
+def sample_homography(cfg: DictConfig, shape: Array, shift: int) -> tuple[Tensor, Tensor]:
     """
     Генерирует случайную гомографию
     """
@@ -27,6 +29,7 @@ def sample_homography(cfg: DictConfig, shape: NDArray, shift: int) -> tuple[Tens
 
     homography = torch.tensor(homography).float()
     inv_homography = torch.tensor(inv_homography).float()
+
     return homography, inv_homography
 
 
@@ -54,3 +57,15 @@ def compute_valid_mask(
             mask[el_ind, :, :] = cv2.erode(mask[el_ind, :, :], kernel, iterations=1)
 
     return torch.tensor(mask).to(device)
+
+
+def homography_adaptation(heatmap, inv_homographies, mask_two_dim, device):
+    heatmap *= mask_two_dim
+
+    warped_heatmap = inv_warp_image_batch(heatmap, inv_homographies, device=device, mode="bilinear")
+    warped_mask = inv_warp_image_batch(mask_two_dim, inv_homographies, device=device, mode="bilinear")
+
+    sum_heatmap = torch.sum(warped_heatmap, dim=0)
+    sum_mask = torch.sum(warped_mask, dim=0)
+
+    return sum_heatmap / torch.clamp(sum_mask, min=EPS)

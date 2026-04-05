@@ -6,7 +6,7 @@ readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
     "numpy==1.26.4",
-    "dvc>=3.66.1",
+    "dvc[ssh]>=3.66.1",
     "flake8-pyproject>=1.2.4",
     "imgaug>=0.4.0",
     "isort>=7.0.0",
@@ -21,11 +21,11 @@ dependencies = [
     "wemake-python-styleguide>=1.5.0",
     "pytest>=9.0.2",
     "dvclive>=3.49.0",
+    "httpx>=0.28.1",
 ]
 
 [tool.ruff]
-# Включаем стандартные правила (Pyflakes, pycodestyle)
-select = ["E", "F", "W", "C90", "I"]
+select = ["I", "E", "F", "W", "C90"]
 # Игнорируем правила, которые будут перекрываться проверками WPS
 ignore = ["E402"]
 target-version = "py311"
@@ -35,11 +35,19 @@ output-format = "full"
 show-fixes = true
 exclude = [
     "scripts/*.py",
+    "tests/*.py"
 ]
+
+[tool.ruff.lint.isort]
+# Чтобы Ruff понимал, что 'src' — это ваш локальный пакет, а не сторонняя либа
+known-first-party = ["src"]
+force-single-line = false
+lines-after-imports = 2
 
 [tool.flake8]
 exclude = [
     "scripts/*.py",
+    "tests/*.py"
 ]
 max-imports = 20
 
@@ -49,15 +57,10 @@ select = "WPS"
 max-line-length = 120
 show-source = true
 ignore = ["WPS420"]
-per-file-ignores = "tests/*: WPS218, WPS301, WPS210, WPS478, src/*: WPS478, WPS210, WPS432"
+per-file-ignores = "tests/*: WPS218, WPS301, WPS210, WPS478, src/*: WPS478, WPS210"
 max-methods = 10
 max-line-complexity = 20
 max-module-members = 10
-
-[tool.isort]
-profile = "wemake"
-line_length = 120
-src_paths = ["src"]
 
 [tool.mypy]
 exclude = [

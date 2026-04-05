@@ -1,7 +1,8 @@
-__pycache__
-
-tmp
-.ruff_cache
-.mypy_cache
+.idea/
+.ruff_cache/
+.mypy_cache/
+.pytest_cache/
+.venv/
 .DS_Store
-.venv
+__pycache__
+tmp/

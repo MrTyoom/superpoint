@@ -1,6 +1,7 @@
 import logging
 import os
 
+
 _LOG_LEVEL = os.environ.get("LOG_LEVEL", "DEBUG")
 LOG_LEVEL = getattr(logging, _LOG_LEVEL.upper(), logging.DEBUG)
 

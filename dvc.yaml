@@ -3,3 +3,31 @@ stages:
     cmd: python scripts/prepare_synthetic_data.py
     params:
     - prepare_synthetic_data
+    deps:
+    - scripts/prepare_synthetic_data.py
+    outs:
+    - ${prepare_synthetic_data.data_dir}
+
+  train_magicpoint:
+    cmd: python src/train_magicpoint.py
+    params:
+    - train_magicpoint
+
+  download_satellite_data:
+    cmd: python scripts/download_satellite_data.py
+    params:
+    - download_satellite_data
+
+  prepare_satellite_images:
+    cmd: python scripts/prepare_satellite_images.py
+    params:
+    - prepare_satellite_images
+
+  export_points:
+    cmd: python src/export_points.py
+    params:
+    - export_points
+
+params:
+- dvclive/params.yaml
+- results/train_magic_point/params.yaml

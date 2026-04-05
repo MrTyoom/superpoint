@@ -1,12 +1,13 @@
 """Функции для генерации случайных гомографий"""
 
 import numpy as np
-from numpy.typing import NDArray
 from omegaconf import DictConfig
 from scipy.stats import truncnorm
 
+from src.types import Array
 
-def get_corners(patch_ratio: int) -> tuple[NDArray, NDArray]:
+
+def get_corners(patch_ratio: int) -> tuple[Array, Array]:
     """Возвращает углы изображения и патча в нормализованных координатах"""
     # Corners of the output image
     pts1 = np.stack([[0, 0], [0, 1], [1, 1], [1, 0]], axis=0)
@@ -24,7 +25,7 @@ def get_perspective_displacement(
     perspective_amplitude_y: float,
     margin: float,
     std_trunc: int = 2,
-) -> NDArray:
+) -> Array:
     """Генерирует смещения для перспективного искажения"""
     if not allow_artifacts:
         perspective_amplitude_x = min(perspective_amplitude_x, margin)
@@ -44,7 +45,7 @@ def get_perspective_displacement(
     ).squeeze()
 
 
-def add_perspective(cfg: DictConfig, pts: NDArray) -> NDArray:
+def add_perspective(cfg: DictConfig, pts: Array) -> Array:
     """Добавляет перспективное искажение к углам"""
     displacement = get_perspective_displacement(
         cfg.allow_artifacts,

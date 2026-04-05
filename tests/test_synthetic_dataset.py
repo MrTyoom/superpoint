@@ -1,16 +1,17 @@
 import matplotlib
+import numpy as np
 import pytest
 import torch
 
 matplotlib.use("Agg")
 from pathlib import Path
 
-# noqa: WPS301
 import matplotlib.pyplot as plt
 import rootutils
-from numpy.typing import NDArray
 from omegaconf import DictConfig, OmegaConf
-from torch.types import Tensor
+
+from src.common import make_dir
+from src.types import Array, Tensor
 
 root = rootutils.setup_root(__file__, indicator="src", pythonpath=True)
 EPS = 1e-8
@@ -23,18 +24,16 @@ from src.synthetic_loader import SyntheticDataset
 def config() -> DictConfig:
     """Загружает конфигурацию для тестов"""
     cfg = OmegaConf.load(root / "params.yaml")
-    return cfg["train_magicpoint"]
+    return cfg.train_magicpoint
 
 
 @pytest.fixture(scope="module")
 def synthetic_dataset(config: DictConfig) -> SyntheticDataset:
     """Создает датасет для тестов"""
     cfg = config.copy()
-
     data_path = root / cfg["data_dir"]
-    files = list(Path(data_path).glob("**/*.png"))
-    files = [cur_file for cur_file in files if cur_file.with_suffix(".npy").exists()]
-    return SyntheticDataset(files, cfg["augmentation"])
+    
+    return SyntheticDataset(data_path, cfg["augmentation"])
 
 
 def test_dataset_item_shape(synthetic_dataset: SyntheticDataset) -> None:
@@ -45,7 +44,7 @@ def test_dataset_item_shape(synthetic_dataset: SyntheticDataset) -> None:
     valid_mask = sample[1]
     labels_two_dim = sample[2]
 
-    assert all(isinstance(sample_el, Tensor) for sample_el in sample)
+    assert all(torch.is_tensor(sample_el) for sample_el in sample)
 
     labels_two_dim_squeezed = labels_two_dim.squeeze()
     valid_mask_squeezed = valid_mask.squeeze()
@@ -59,7 +58,7 @@ def test_dataset_item_shape(synthetic_dataset: SyntheticDataset) -> None:
     assert valid_mask_squeezed.shape == (height, width)
 
     cfg = OmegaConf.load(root / "params.yaml")
-    expected_size = cfg["prepare_synthetic_data"]["image_size"]
+    expected_size = cfg.prepare_synthetic_data.image_size
 
     assert (height, width) == tuple(expected_size) or (width, height) == tuple(expected_size)
 
@@ -104,12 +103,12 @@ def prepare_tensor(tensor: Tensor) -> Tensor:
     return tensor
 
 
-def tensor_to_image(tensor: Tensor) -> Tensor:
+def tensor_to_image(tensor: Tensor) -> Array:
     """Конвертирует тензор в numpy array для imshow"""
     return tensor.squeeze(0).numpy()
 
 
-def normalize_label(img_np: NDArray) -> NDArray:
+def normalize_label(img_np: Array) -> Array:
     """Нормализует изображение метки"""
     if img_np.max() > img_np.min():
         return (img_np - img_np.min()) / (img_np.max() - img_np.min() + EPS)
@@ -135,10 +134,13 @@ def save_image_tensor(tensor: Tensor, filename: Path | str, is_label: bool = Fal
     return True
 
 
+def to_image(tensor: Tensor) -> Array:
+    return (255 * tensor).numpy().astype(np.uint8)
+
+
 def test_image_saving(synthetic_dataset: SyntheticDataset) -> None:
     """Тестирует сохранение изображений"""
-    output_dir = Path("tmp/test_output")
-    output_dir.mkdir(exist_ok=True)
+    output_dir = make_dir("tmp/test_output")
 
     dataloader = torch.utils.data.DataLoader(synthetic_dataset, batch_size=4, shuffle=True, num_workers=0)
     batch = next(iter(dataloader))
@@ -150,9 +152,9 @@ def test_image_saving(synthetic_dataset: SyntheticDataset) -> None:
     mask = mask_batch[0].squeeze(0)
     labels = labels_batch[0].squeeze(0)
 
-    plt.imsave(output_dir / "image.png", img.numpy(), cmap=GRAY_CMAP)
-    plt.imsave(output_dir / "mask.png", mask.numpy(), cmap=GRAY_CMAP)
-    plt.imsave(output_dir / "labels.png", labels.numpy(), cmap=GRAY_CMAP)
+    plt.imsave(output_dir / "image.png", to_image(img), cmap=GRAY_CMAP)
+    plt.imsave(output_dir / "mask.png", to_image(mask), cmap=GRAY_CMAP)
+    plt.imsave(output_dir / "labels.png", to_image(labels), cmap=GRAY_CMAP)
 
 
 if __name__ == "__main__":

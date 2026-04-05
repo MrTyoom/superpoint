@@ -2,7 +2,11 @@
 
 import torch
 from torch.nn.functional import grid_sample
-from torch.types import Tensor
+
+from src.types import Tensor
+
+
+TWO = 2.0
 
 
 def inv_warp_image_batch(
@@ -90,8 +94,8 @@ def warp_points(points: Tensor, homographies: Tensor, device: torch.device | str
 
     # homogen coords
     all_ones = torch.ones((points.shape[0], 1)).to(device)
-    points = torch.cat((points.float(), all_ones), dim=1)
     points = points.to(device)
+    points = torch.cat((points.float(), all_ones), dim=1)
 
     # (B, 3, 3) -> (Bx3, 3)
     homographies = homographies.view(batch_size * 3, 3)
@@ -108,8 +112,8 @@ def warp_points(points: Tensor, homographies: Tensor, device: torch.device | str
 
 
 def homography_scaling_torch(homography: Tensor, height: int, width: int) -> Tensor:
-    row1 = torch.tensor([2.0 / width, 0, -1])
-    row2 = torch.tensor([0, 2.0 / height, -1])
+    row1 = torch.tensor([TWO / width, 0, -1])
+    row2 = torch.tensor([0, TWO / height, -1])
     row3 = torch.tensor([0, 0, 1.0])
 
     trans = torch.stack([row1, row2, row3])
@@ -117,11 +121,11 @@ def homography_scaling_torch(homography: Tensor, height: int, width: int) -> Ten
     return homography
 
 
-def filter_points(points: Tensor, shape: Tensor, return_mask: bool = False) -> Tensor | tuple[Tensor, Tensor]:
+def filter_points(points: Tensor, shape: Tensor) -> Tensor:
     points = points.float()
     shape = shape.float()
+
     mask = (points >= 0) * (points <= shape - 1)
     mask = torch.prod(mask, dim=-1) == 1
-    if return_mask:
-        return points[mask], mask
+
     return points[mask]

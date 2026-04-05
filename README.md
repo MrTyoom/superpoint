@@ -18,6 +18,20 @@
 ```bash
     # генерация синтетических данных
     dvc repro prepare_synthetic_data
+    
+    # обучение модели MagicPoint на синтетических данных
+    dvc repro train_magicpoint
+    
+    # скачивание спутниковых снимков с TMS сервисов
+    dvc repro download_satellite_data
+    
+    # подготовка данных для экспорта ключевых точек
+    dvc repro prepare_satellite_images
+    
+    # экспорт ключевых точек на спутниковые изображения
+    dvc repro export_points
+    
+    
 ```
 
 #### **Pre-commit check**

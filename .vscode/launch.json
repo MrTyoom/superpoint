@@ -1,7 +1,6 @@
 {
     "version": "0.2.0",
     "configurations": [
-
         {
             "name": "prepare_synthetic_data",
             "type": "debugpy",
@@ -11,10 +10,42 @@
             "justMyCode": false
         },
         {
-            "name": "train_magicpoint",
+            "name": "train_magic_point",
             "type": "debugpy",
             "request": "launch",
             "program": "src/train_magicpoint.py",
+            "console": "integratedTerminal",
+            "justMyCode": false
+        },
+        {
+            "name": "eval_magicpoint",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "src/eval_magicpoint.py",
+            "console": "integratedTerminal",
+            "justMyCode": false
+        },
+        {
+            "name": "download_satellite_data",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "scripts/download_satellite_data.py",
+            "console": "integratedTerminal",
+            "justMyCode": false
+        },
+        {
+            "name": "prepare_satellite_images",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "scripts/prepare_satellite_images.py",
+            "console": "integratedTerminal",
+            "justMyCode": false
+        },
+        {
+            "name": "export_points",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "scripts/export_points.py",
             "console": "integratedTerminal",
             "justMyCode": false
         }

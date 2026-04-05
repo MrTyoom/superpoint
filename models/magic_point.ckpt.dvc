@@ -1,0 +1,5 @@
+outs:
+- md5: e885ecf892442ae43f2c86f1472617a4
+  size: 12843683
+  hash: md5
+  path: magic_point.ckpt

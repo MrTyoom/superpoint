@@ -5,12 +5,16 @@ import numpy as np
 import torch
 from lightning import LightningDataModule
 from omegaconf import DictConfig
-from torch.types import Tensor
 from torch.utils.data import DataLoader, Dataset
 
 from src.augmentation import PhotometricAugmentation
 from src.homography.apply import filter_points, homography_scaling_torch, inv_warp_image, warp_points
 from src.homography.homography_utils import compute_valid_mask, sample_homography
+from src.types import Tensor
+
+
+MAX_PIXEL = 255.0
+TRAIN_MODE = "train"
 
 
 def get_labels(pnts: Tensor, height: int, width: int) -> Tensor:
@@ -27,11 +31,13 @@ def get_labels(pnts: Tensor, height: int, width: int) -> Tensor:
 
 
 class SyntheticDataset(Dataset):
-    def __init__(self, files: list[Path], aug_cfg: DictConfig, mode: str = "train") -> None:
+    def __init__(self, data_dir: Path, aug_cfg: DictConfig, mode: str = TRAIN_MODE) -> None:
         super().__init__()
 
+        files = [fp for fp in Path(data_dir).glob("**/*.png") if fp.with_suffix(".npy").exists()]
+
         self.image_files = files
-        self.annot_files = [cur_file.with_suffix(".npy") for cur_file in files]
+        self.annot_files = [fp.with_suffix(".npy") for fp in files]
 
         self.mode = mode
         self.aug_cfg = aug_cfg
@@ -45,7 +51,7 @@ class SyntheticDataset(Dataset):
 
         height, width = src_image.shape
 
-        if self.mode == "train":
+        if self.mode == TRAIN_MODE:
             aug = PhotometricAugmentation(self.aug_cfg.photometric)
             src_image = aug(src_image)
 
@@ -54,7 +60,7 @@ class SyntheticDataset(Dataset):
             homography = torch.eye(3)
             inv_homography = torch.eye(3)
 
-        images = torch.from_numpy(src_image).float()
+        images = torch.from_numpy(src_image).float() / MAX_PIXEL
 
         warped_img = inv_warp_image(images.squeeze(), inv_homography, mode="bilinear").unsqueeze(0)
 
@@ -65,25 +71,25 @@ class SyntheticDataset(Dataset):
 
         warped_pts = filter_points(warped_pts, torch.tensor([width, height]))
 
-        if self.mode == "val":
-            masks = torch.ones(height, width)
-            masks = masks.unsqueeze(0)
-        else:
+        if self.mode == TRAIN_MODE:
             masks = compute_valid_mask(
                 torch.tensor([height, width]),
                 inv_homography=inv_homography,
                 erosion_radius=self.aug_cfg.homographic.valid_border_margin,
             )
+        else:
+            masks = torch.ones(height, width)
+            masks = masks.unsqueeze(0)
 
         labels = get_labels(warped_pts, height, width)
 
-        sample = (warped_img, masks, labels)
-        return sample
+        return warped_img, masks, labels
 
 
 class Loader(LightningDataModule):
-    def __init__(self, cfg: DictConfig) -> None:
+    def __init__(self, cfg: DictConfig, dataset_class: Dataset) -> None:
         super().__init__()
+        self.dataset_class = dataset_class
 
         self.train_dataset: Dataset | None = None
         self.val_dataset: Dataset | None = None
@@ -112,23 +118,8 @@ class Loader(LightningDataModule):
 
     def setup(self, stage: str) -> None:
         if stage == "fit":
-            train_files, val_files = self.split_files()
-
+            data_dir = Path(self.hparams.cfg.data_dir)
             aug_cfg = self.hparams.cfg.augmentation
 
-            self.train_dataset = SyntheticDataset(train_files, aug_cfg, "train")
-            self.val_dataset = SyntheticDataset(val_files, aug_cfg, "val")
-
-    def split_files(self) -> tuple[list[Path], list[Path]]:
-        cfg = self.hparams.cfg
-
-        files = list(Path(cfg.data_dir).glob("**/*.png"))
-        files = [cur_file for cur_file in files if cur_file.with_suffix(".npy").exists()]
-
-        rng = np.random.RandomState(cfg.seed)
-        rng.shuffle(files)
-
-        train_size = cfg.train_size
-        num_train_files = int(len(files) * train_size)
-
-        return files[:num_train_files], files[num_train_files:]
+            self.train_dataset = self.dataset_class(data_dir / "train", aug_cfg, "train")
+            self.val_dataset = self.dataset_class(data_dir / "test", aug_cfg, "val")
