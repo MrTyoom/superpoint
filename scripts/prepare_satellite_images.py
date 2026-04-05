@@ -1,20 +1,15 @@
 import os
-import random
 from pathlib import Path
 
 import rootutils
-import numpy as np
 from PIL import Image
-#from osgeo import gdal
 from tqdm import tqdm
 from joblib import Parallel, delayed, parallel_backend, wrap_non_picklable_objects
 from omegaconf import OmegaConf
 
 rootutils.setup_root(__file__, indicator="src", pythonpath=True)
 
-from src.common import make_dir  # noqa
-
-random_state = np.random.RandomState(None)
+from src.common import make_dir
 
 def get_tiles(cfg):
     crop_size = cfg.crop_size
@@ -50,14 +45,7 @@ def process(item, tile, data_dir):
     
 
 def main(cfg):
-    global random_state
-
-    random_state = np.random.RandomState(cfg.seed)
-    random.seed(cfg.seed)
-
     tiles = get_tiles(cfg)
-    random.shuffle(tiles)
-
     images_dir = make_dir(cfg.images_dir, delete_if_exist=True)
 
     with parallel_backend("threading"):
