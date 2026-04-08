@@ -195,8 +195,14 @@ class SuperPointLightning(LightningModule):
     def forward(self, sat_data: Tensor) -> Tensor:
         return self._net(batch=sat_data, descriptor=self._descriptor)
 
-    def training_step(self, sample: tuple[Tensor, ...]) -> Tensor:
-        img, img_w, mask, mask_w, labels, labels_w, homo, homo_inv = sample  # noqa: WPS236
+    def training_step(self, sample: dict) -> Tensor:
+        img = sample["image"]
+        img_w = sample["warped_img"]
+        mask = sample["mask"]
+        mask_w = sample["mask_w"]
+        labels = sample["labels"]
+        labels_w = sample["labels_w"]
+        homo = sample["homography"]
 
         semi, desc = self(img)
         semi_w, desc_w = self(img_w)
@@ -211,8 +217,14 @@ class SuperPointLightning(LightningModule):
         self.train_loss.reset()
         self.log("train/loss", loss, on_step=False, on_epoch=True)
 
-    def validation_step(self, sample: tuple[Tensor, ...]):
-        img, img_w, mask, mask_w, labels, labels_w, homo, homo_inv = sample  # noqa: WPS236
+    def validation_step(self, sample: dict):
+        img = sample["img"]
+        img_w = sample["img_w"]
+        mask = sample["mask"]
+        mask_w = sample["mask_w"]
+        labels = sample["labels"]
+        labels_w = sample["labels_w"]
+        homo = sample["homo"]
 
         semi, desc = self(img)
         semi_w, desc_w = self(img_w)
