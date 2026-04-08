@@ -52,7 +52,7 @@ class SyntheticDataset(Dataset):
         height, width = src_image.shape
 
         if self.mode == TRAIN_MODE:
-            aug = PhotometricAugmentation(self.aug_cfg.augmentation)
+            aug = PhotometricAugmentation(self.aug_cfg.photometric)
             src_image = aug(src_image)
 
             homography, inv_homography = sample_homography(self.aug_cfg.homographic, np.array([2, 2]), shift=-1)
