@@ -105,7 +105,7 @@ def affine_transform_points(
     return dst_pts
 
 
-def calc_homography_grid(src_pts: Tensor, dst_pts: Tensor, batch: Tensor) -> tuple[Tensor, Tensor]:
+def calc_homography_grid(src_pts: Tensor, dst_pts: Tensor, batch: Tensor) -> tuple[Tensor, ...]:
     batch_size, channels, height, width = batch.shape
     device = batch.device
 
@@ -123,7 +123,7 @@ def calc_homography_grid(src_pts: Tensor, dst_pts: Tensor, batch: Tensor) -> tup
         inv_homography[:, :2, :], [batch_size, channels, height, width], align_corners=True
     )
 
-    return grid, inv_grid
+    return grid, inv_grid, homography, inv_homography
 
 
 def adjust_brightness(batch: Tensor, min_brightness: int, max_brightness: int, batch_size: int) -> Tensor:
@@ -164,8 +164,10 @@ class Augmentation:
             src_pts, rotation_matrices, (width, height), self.cfg.min_shift, self.cfg.max_shift
         )
 
-        grid, inv_grid = calc_homography_grid(src_pts, dst_pts, batch)
+        grid, inv_grid, homography, inv_homography = calc_homography_grid(src_pts, dst_pts, batch)
         self.grid = grid
+        self.homography = homography
+        self.inv_homography = inv_homography
 
         # геометрическая аугментация с помощью обратных гомографий
         batch = torch.grid_sampler(batch, inv_grid, 0, 0, align_corners=True)

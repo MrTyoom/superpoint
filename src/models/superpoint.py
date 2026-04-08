@@ -3,7 +3,8 @@ from lightning import LightningModule
 from torch.nn import BatchNorm2d, BCELoss, Conv2d, MaxPool2d, Module, ReLU
 from torchmetrics import MeanMetric
 
-from src.loss import loss_calculation
+from src.loss_utils.loss import detector_loss_calculation
+from src.loss_utils.sparse_loss import descriptor_loss_sparse
 from src.metrics import metric_calculation
 from src.types import Tensor
 
@@ -111,7 +112,7 @@ class MagicPointLightning(LightningModule):
         img, masks, labels = sample
         semi = self(img)
 
-        loss = loss_calculation(semi, labels, masks, self._criterion, self.hparams.cell_size)
+        loss = detector_loss_calculation(semi, labels, masks, self._criterion, self.hparams.cell_size)
         self.train_loss(loss)
 
         return loss
@@ -125,13 +126,105 @@ class MagicPointLightning(LightningModule):
         img, masks, labels = sample
         semi = self(img)
 
-        loss = loss_calculation(semi, labels, masks, self._criterion, self.hparams.cell_size)
+        loss = detector_loss_calculation(semi, labels, masks, self._criterion, self.hparams.cell_size)
         self.val_loss(loss)
 
         precision, recall = metric_calculation(
             semi,
             labels,
             masks,
+            self.hparams.detection_threshold,
+            self.hparams.nms_dist,
+        )
+
+        self.val_precision(precision)
+        self.val_recall(recall)
+
+    def on_validation_epoch_end(self) -> None:
+        avg_loss = self.val_loss.compute()
+        avg_precision = self.val_precision.compute()
+        avg_recall = self.val_recall.compute()
+
+        self.log("val/loss", avg_loss, on_step=False, on_epoch=True)
+        self.log("val/precision", avg_precision, on_step=False, on_epoch=True)
+        self.log("val/recall", avg_recall, on_step=False, on_epoch=True)
+
+        self.val_loss.reset()
+        self.val_precision.reset()
+        self.val_recall.reset()
+
+    def configure_optimizers(self):
+        optimizer = torch.optim.Adam(self._net.parameters(), lr=self.hparams.learning_rate)
+        return optimizer
+
+
+class SuperPointLoss(Module):
+    def __init__(self, cfg: dict):
+        super().__init__()
+
+        self.detector_loss = BCELoss(reduction="none")
+        self.descriptor_loss = descriptor_loss_sparse
+        self.lambda_loss = cfg["lambda_loss"]
+        self.cell_size = cfg["cell_size"]
+
+    def forward(self, semi, semi_w, desc, desc_w, labels_three_dim, labels_three_dim_w, mask, mask_w, homo):  # noqa: WPS211
+        loss_det = detector_loss_calculation(semi, labels_three_dim, mask, self.detector_loss, self.cell_size)
+        loss_det_w = detector_loss_calculation(semi_w, labels_three_dim_w, mask_w, self.detector_loss, self.cell_size)
+
+        loss_desc, _, _ = self.descriptor_loss(desc, desc_w, homo)
+
+        return loss_det + loss_det_w + self.lambda_loss * loss_desc
+
+
+class SuperPointLightning(LightningModule):
+    def __init__(self, cfg: dict) -> None:
+        super().__init__()
+
+        self._descriptor = True
+        self._criterion = SuperPointLoss(cfg)
+        self._net = SuperPoint()
+
+        self.train_loss = MeanMetric()
+        self.val_loss = MeanMetric()
+
+        self.val_precision = MeanMetric()
+        self.val_recall = MeanMetric()
+
+        self.save_hyperparameters(cfg)
+
+    def forward(self, sat_data: Tensor) -> Tensor:
+        return self._net(batch=sat_data, descriptor=self._descriptor)
+
+    def training_step(self, sample: tuple[Tensor, ...]) -> Tensor:
+        img, img_w, mask, mask_w, labels, labels_w, homo, homo_inv = sample  # noqa: WPS236
+
+        semi, desc = self(img)
+        semi_w, desc_w = self(img_w)
+
+        loss = self._criterion(semi, semi_w, desc, desc_w, labels, labels_w, mask, mask_w, homo)
+
+        self.train_loss(loss)
+        return loss
+
+    def on_train_epoch_end(self) -> None:
+        loss = self.train_loss.compute()
+        self.train_loss.reset()
+        self.log("train/loss", loss, on_step=False, on_epoch=True)
+
+    def validation_step(self, sample: tuple[Tensor, ...]):
+        img, img_w, mask, mask_w, labels, labels_w, homo, homo_inv = sample  # noqa: WPS236
+
+        semi, desc = self(img)
+        semi_w, desc_w = self(img_w)
+
+        loss = self._criterion(semi, semi_w, desc, desc_w, labels, labels_w, mask, mask_w, homo)
+
+        self.val_loss(loss)
+
+        precision, recall = metric_calculation(
+            semi,
+            labels,
+            mask,
             self.hparams.detection_threshold,
             self.hparams.nms_dist,
         )

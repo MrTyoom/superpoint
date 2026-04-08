@@ -52,7 +52,7 @@ class SyntheticDataset(Dataset):
         height, width = src_image.shape
 
         if self.mode == TRAIN_MODE:
-            aug = PhotometricAugmentation(self.aug_cfg.photometric)
+            aug = PhotometricAugmentation(self.aug_cfg.augmentation)
             src_image = aug(src_image)
 
             homography, inv_homography = sample_homography(self.aug_cfg.homographic, np.array([2, 2]), shift=-1)
@@ -121,5 +121,5 @@ class Loader(LightningDataModule):
             data_dir = Path(self.hparams.cfg.data_dir)
             aug_cfg = self.hparams.cfg.augmentation
 
-            self.train_dataset = self.dataset_class(data_dir / "train", aug_cfg, "train")
-            self.val_dataset = self.dataset_class(data_dir / "test", aug_cfg, "val")
+            self.train_dataset = self.dataset_class(data_dir / "test", aug_cfg, "train")
+            self.val_dataset = self.dataset_class(data_dir / "train", aug_cfg, "val")

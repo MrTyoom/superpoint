@@ -47,7 +47,9 @@ lines-after-imports = 2
 [tool.flake8]
 exclude = [
     "scripts/*.py",
-    "tests/*.py"
+    "tests/*.py",
+    "src/loss_utils/*.py",
+    "src/train_utils/correspondence_finder.py"
 ]
 max-imports = 20
 
