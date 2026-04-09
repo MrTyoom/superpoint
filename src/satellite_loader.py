@@ -8,7 +8,7 @@ from torch.utils.data import Dataset
 
 from src.homography.apply import filter_points, homography_scaling_torch, warp_points
 from src.homography.homography_utils import compute_valid_mask
-from src.synthetic_loader import get_labels
+from src.loss_utils.loss import get_labels, get_masks
 from src.transform import Augmentation
 
 
@@ -42,6 +42,7 @@ class SatelliteDataset(Dataset):
 
         if self.mode == TRAIN_MODE:
             aug = Augmentation(self.aug_cfg)
+
             images = aug(images)
 
             homography = aug.homography
@@ -81,11 +82,14 @@ class SatelliteDataset(Dataset):
         labels = get_labels(pts_tensor[:, :2], height, width)
         labels_w = get_labels(warped_pts, height, width)
 
+        mask_flat = get_masks(mask, self.aug_cfg.cell_size)
+        mask_flat_w = get_masks(mask_w, self.aug_cfg.cell_size)
+
         return {
             "image": images,
             "warped_img": warped_img,
-            "mask": mask,
-            "mask_w": mask_w,
+            "mask": mask_flat,
+            "mask_w": mask_flat_w,
             "labels": labels,
             "labels_w": labels_w,
             "homo": homography,

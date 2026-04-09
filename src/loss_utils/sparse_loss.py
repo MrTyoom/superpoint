@@ -137,7 +137,8 @@ def descriptor_loss_sparse(
     """
 
     Hc, Wc = descriptors.shape[1], descriptors.shape[2]
-    img_shape = (Hc, Wc)
+    H, W = Hc * cell_size, Wc * cell_size
+    img_shape = (H, W)
 
     # image_a_pred = descriptors.view(1, -1, Hc * Wc).transpose(1, 2)  # torch [batch_size, H*W, D]
     def descriptor_reshape(descriptors):

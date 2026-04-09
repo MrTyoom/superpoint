@@ -4,7 +4,7 @@ from torch.nn import BatchNorm2d, BCELoss, Conv2d, MaxPool2d, Module, ReLU
 from torchmetrics import MeanMetric
 
 from src.loss_utils.loss import detector_loss_calculation
-from src.loss_utils.sparse_loss import descriptor_loss_sparse
+from src.loss_utils.sparse_loss import batch_descriptor_loss_sparse
 from src.metrics import metric_calculation
 from src.types import Tensor
 
@@ -163,7 +163,7 @@ class SuperPointLoss(Module):
         super().__init__()
 
         self.detector_loss = BCELoss(reduction="none")
-        self.descriptor_loss = descriptor_loss_sparse
+        self.descriptor_loss = batch_descriptor_loss_sparse
         self.lambda_loss = cfg["lambda_loss"]
         self.cell_size = cfg["cell_size"]
 
@@ -171,7 +171,8 @@ class SuperPointLoss(Module):
         loss_det = detector_loss_calculation(semi, labels_three_dim, mask, self.detector_loss, self.cell_size)
         loss_det_w = detector_loss_calculation(semi_w, labels_three_dim_w, mask_w, self.detector_loss, self.cell_size)
 
-        loss_desc, _, _ = self.descriptor_loss(desc, desc_w, homo)
+        mask_desc = mask_w.unsqueeze(1)
+        loss_desc, _, _, _ = self.descriptor_loss(desc, desc_w, homo, mask_desc)
 
         return loss_det + loss_det_w + self.lambda_loss * loss_desc
 
