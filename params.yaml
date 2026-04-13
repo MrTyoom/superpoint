@@ -136,11 +136,11 @@ train_superpoint:
   nms_dist: 4
   limit_val_batches: 100
   log_dir: results/train_super_point
-  data_dir: data/satellite_images
+  data_dir: data/home3/avsorokin_3/superpoint/data/satellite_images
   train_size: 0.8
-  train_batch_size: 64 # 128
-  val_batch_size: 64
-  num_workers: 12 # 16
+  train_batch_size: 16 # 128
+  val_batch_size: 16
+  num_workers: 2 # 16
   lambda_loss: 1
   sparse_loss:
     num_matching_attempts: 1000
@@ -149,6 +149,8 @@ train_superpoint:
     dist: "cos"
     method: "2d"
   augmentation:
+    crop_h: 320
+    crop_w: 320
     # минимальный и максимальный угол поворота в градусах
     min_angle: 0
     max_angle: 360
@@ -162,3 +164,4 @@ train_superpoint:
     min_contrast: 0.7
     max_contrast: 1.3
     valid_border_margin: 2
+    cell_size: 8

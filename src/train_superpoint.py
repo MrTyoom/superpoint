@@ -37,6 +37,7 @@ def main(cfg):
     trainer = Trainer(
         max_epochs=cfg.num_epochs,
         limit_val_batches=cfg.limit_val_batches,
+        num_sanity_val_steps=0,
         default_root_dir=cfg.log_dir,
         callbacks=callbacks,
         accelerator="gpu" if torch.cuda.is_available() else "cpu",

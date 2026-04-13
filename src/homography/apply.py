@@ -121,11 +121,13 @@ def homography_scaling_torch(homography: Tensor, height: int, width: int) -> Ten
     return homography
 
 
-def filter_points(points: Tensor, shape: Tensor) -> Tensor:
+def filter_points(points: Tensor, shape: Tensor, return_mask=False) -> Tensor:
     points = points.float()
     shape = shape.float()
 
     mask = (points >= 0) * (points <= shape - 1)
     mask = torch.prod(mask, dim=-1) == 1
 
+    if return_mask:
+        return points[mask], mask
     return points[mask]
