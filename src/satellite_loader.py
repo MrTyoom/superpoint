@@ -8,100 +8,13 @@ from torch.utils.data import Dataset
 
 from src.homography.apply import filter_points, homography_scaling_torch, warp_points
 from src.homography.homography_utils import compute_valid_mask
+from src.train_utils.crop_utils import crop_data, crop_homography, get_center_crop_bounds
+from src.train_utils.train_utils import as_float_tensor, denormalize_points, normPts, points_to_two_dim
 from src.transform import Augmentation
 
 
 MAX_PIXEL = 255.0
 TRAIN_MODE = "train"
-
-
-def to_floatTensor(sample):
-    return torch.tensor(sample).type(torch.FloatTensor)
-
-
-def normalize_points(points, height, width):
-    pts = points.clone()
-
-    x_coords = pts[:, 0]
-    y_coords = pts[:, 1]
-
-    x_coords = (x_coords / width) * 2 - 1
-    y_coords = (y_coords / height) * 2 - 1
-    return pts
-
-
-def denormalize_points(points, height, width):
-    pts = points.clone()
-    pts[:, 0] = (points[:, 0] + 1) * width / 2
-    pts[:, 1] = (points[:, 1] + 1) * height / 2
-    return pts
-
-
-def points_to_two_dim(pnts, height, width):
-    labels = np.zeros((height, width))
-    pnts = pnts.int()
-    labels[pnts[:, 1], pnts[:, 0]] = 1
-    return labels
-
-
-def get_center_crop_bounds(height, width, crop_h, crop_w):
-    crop_h = min(crop_h, height)
-    crop_w = min(crop_w, width)
-
-    top = (height - crop_h) // 2
-    left = (width - crop_w) // 2
-    bottom = top + crop_h
-    right = left + crop_w
-
-    return left, right, top, bottom
-
-
-def crop_tensor(tens, bounds):
-    left, right, top, bottom = bounds
-    return tens[:, top:bottom, left:right]
-
-
-def crop_points(points, bounds, crop_h, crop_w):
-    left, _, top, _ = bounds
-
-    pts = points.clone()
-    pts[:, 0] -= left
-    pts[:, 1] -= top
-
-    low_bound = (pts[:, 0] >= 0) & (pts[:, 1] >= 0)
-    up_bound = (pts[:, 0] < crop_w) & (pts[:, 1] < crop_h)
-    valid = low_bound & up_bound
-
-    return pts[valid]
-
-
-def crop_data(images, warped_img, mask, mask_w, pts, warped_pts, bounds, crop_h, crop_w):  # noqa: WPS211
-    images = crop_tensor(images, bounds)
-    warped_img = crop_tensor(warped_img, bounds)
-
-    mask = crop_tensor(mask, bounds)
-    mask_w = crop_tensor(mask_w, bounds)
-
-    pts = crop_points(pts, bounds, crop_h, crop_w)
-    warped_pts = crop_points(warped_pts, bounds, crop_h, crop_w)
-
-    return (images, warped_img), (mask, mask_w), pts, warped_pts
-
-
-def crop_homography(homography, left, top):
-    homo = torch.tensor(
-        [[1, 0, -left], [0, 1, -top], [0, 0, 1]],
-        dtype=torch.float32,
-    )
-    homo = homo.unsqueeze(0)
-
-    homo_inv = torch.tensor([[1, 0, left], [0, 1, top], [0, 0, 1]], dtype=torch.float32)  # noqa: WPS221
-    homo_inv = homo_inv.unsqueeze(0)
-
-    homo_crop = homo @ homography @ homo_inv
-    inv_homo_crop = torch.linalg.inv(homo_crop)
-
-    return homo_crop, inv_homo_crop
 
 
 class SatelliteDataset(Dataset):
@@ -165,7 +78,7 @@ class SatelliteDataset(Dataset):
 
         homography_scaled = homography_scaling_torch(homography, H_full, W_full)
 
-        pts_norm = normalize_points(pts_tensor, H_full, W_full)
+        pts_norm = normPts(pts_tensor, W_full)
         warped_pts_norm = warp_points(pts_norm, homography_scaled.squeeze(0))
         warped_pts = denormalize_points(warped_pts_norm, H_full, W_full)
 
@@ -192,10 +105,10 @@ class SatelliteDataset(Dataset):
         mask, mask_w = masks
 
         labels = points_to_two_dim(pts_crop, crop_h, crop_w)
-        labels_two_dim = to_floatTensor(labels[np.newaxis, :, :])
+        labels_two_dim = as_float_tensor(labels[np.newaxis, :, :])
 
         labels_w = points_to_two_dim(warped_pts_crop, crop_h, crop_w)
-        labels_two_dim_w = to_floatTensor(labels_w[np.newaxis, :, :])
+        labels_two_dim_w = as_float_tensor(labels_w[np.newaxis, :, :])
 
         left, _, top, _ = bounds
         homo_crop, inv_homo_crop = crop_homography(homography_scaled, left, top)

@@ -121,5 +121,5 @@ class Loader(LightningDataModule):
             data_dir = Path(self.hparams.cfg.data_dir)
             aug_cfg = self.hparams.cfg.augmentation
 
-            self.train_dataset = self.dataset_class(data_dir / "test", aug_cfg, "train")
-            self.val_dataset = self.dataset_class(data_dir / "train", aug_cfg, "val")
+            self.train_dataset = self.dataset_class(data_dir / "train", aug_cfg, "train")
+            self.val_dataset = self.dataset_class(data_dir / "test", aug_cfg, "val")

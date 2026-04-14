@@ -3,8 +3,7 @@ from lightning import LightningModule
 from torch.nn import BatchNorm2d, BCELoss, Conv2d, MaxPool2d, Module, ReLU
 from torchmetrics import MeanMetric
 
-from src.loss_utils.loss import detector_loss_calculation
-from src.loss_utils.sparse_loss import batch_descriptor_loss_sparse
+from src.loss_utils.loss import SuperPointLoss, detector_loss_calculation
 from src.metrics import metric_calculation
 from src.types import Tensor
 
@@ -158,25 +157,6 @@ class MagicPointLightning(LightningModule):
         return optimizer
 
 
-class SuperPointLoss(Module):
-    def __init__(self, cfg: dict):
-        super().__init__()
-
-        self.detector_loss = BCELoss(reduction="none")
-        self.descriptor_loss = batch_descriptor_loss_sparse
-        self.lambda_loss = cfg["lambda_loss"]
-        self.cell_size = cfg["cell_size"]
-
-    def forward(self, semi, semi_w, desc, desc_w, labels_three_dim, labels_three_dim_w, mask, mask_w, homo):  # noqa: WPS211
-        loss_det = detector_loss_calculation(semi, labels_three_dim, mask, self.detector_loss, self.cell_size)
-        loss_det_w = detector_loss_calculation(semi_w, labels_three_dim_w, mask_w, self.detector_loss, self.cell_size)
-
-        mask_desc = mask_w.unsqueeze(1)
-        loss_desc, _, _, _ = self.descriptor_loss(desc, desc_w, homo, mask_desc)
-
-        return loss_det + loss_det_w + self.lambda_loss * loss_desc
-
-
 class SuperPointLightning(LightningModule):
     def __init__(self, cfg: dict) -> None:
         super().__init__()
@@ -199,16 +179,18 @@ class SuperPointLightning(LightningModule):
     def training_step(self, sample: dict) -> Tensor:
         img = sample["image"]
         img_w = sample["warped_img"]
-        mask = sample["mask"]
-        mask_w = sample["mask_w"]
-        labels = sample["labels"]
-        labels_w = sample["labels_w"]
-        homo = sample["homography"]
+        mask_two_dim = sample["mask"]
+        mask_two_dim_w = sample["mask_w"]
+        labels_two_dim = sample["labels"]
+        labels_two_dim_w = sample["labels_w"]
+        homo = sample["homo"]
 
         semi, desc = self(img)
         semi_w, desc_w = self(img_w)
 
-        loss = self._criterion(semi, semi_w, desc, desc_w, labels, labels_w, mask, mask_w, homo)
+        masks = (mask_two_dim, mask_two_dim_w)
+
+        loss = self._criterion(semi, semi_w, desc, desc_w, labels_two_dim, labels_two_dim_w, masks, homo)
 
         self.train_loss(loss)
         return loss
@@ -219,25 +201,27 @@ class SuperPointLightning(LightningModule):
         self.log("train/loss", loss, on_step=False, on_epoch=True)
 
     def validation_step(self, sample: dict):
-        img = sample["img"]
-        img_w = sample["img_w"]
-        mask = sample["mask"]
-        mask_w = sample["mask_w"]
-        labels = sample["labels"]
-        labels_w = sample["labels_w"]
+        img = sample["image"]
+        img_w = sample["warped_img"]
+        mask_two_dim = sample["mask"]
+        mask_two_dim_w = sample["mask_w"]
+        labels_two_dim = sample["labels"]
+        labels_two_dim_w = sample["labels_w"]
         homo = sample["homo"]
 
         semi, desc = self(img)
         semi_w, desc_w = self(img_w)
 
-        loss = self._criterion(semi, semi_w, desc, desc_w, labels, labels_w, mask, mask_w, homo)
+        masks = (mask_two_dim, mask_two_dim_w)
+
+        loss = self._criterion(semi, semi_w, desc, desc_w, labels_two_dim, labels_two_dim_w, masks, homo)
 
         self.val_loss(loss)
 
         precision, recall = metric_calculation(
             semi,
-            labels,
-            mask,
+            labels_two_dim,
+            mask_two_dim,
             self.hparams.detection_threshold,
             self.hparams.nms_dist,
         )

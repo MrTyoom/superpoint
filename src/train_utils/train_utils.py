@@ -1,7 +1,26 @@
 import cv2
 import numpy as np
+import torch
 
 from src.types import Array, Tensor
+
+
+def as_float_tensor(sample):
+    return torch.tensor(sample).type(torch.FloatTensor)
+
+
+def denormalize_points(points, height, width):
+    pts = points.clone()
+    pts[:, 0] = (points[:, 0] + 1) * width / 2
+    pts[:, 1] = (points[:, 1] + 1) * height / 2
+    return pts
+
+
+def points_to_two_dim(pnts, height, width):
+    labels = np.zeros((height, width))
+    pnts = pnts.int()
+    labels[pnts[:, 1], pnts[:, 0]] = 1
+    return labels
 
 
 def normPts(pts, shape):

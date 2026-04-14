@@ -6,6 +6,10 @@ from src.train_utils.correspondence_finder import create_non_correspondences
 from src.train_utils.train_utils import crop_or_pad_choice, normPts
 
 
+def reshape(x, Hc, Wc):
+    return x.view(-1, Hc * Wc).transpose(0, 1).unsqueeze(0)
+
+
 def warp_coor_cells_with_homographies(coor_cells, homographies, uv=False, device="cpu"):
     if not uv:
         coor_cells = torch.stack((coor_cells[:, 1], coor_cells[:, 0]), dim=1)
@@ -53,12 +57,6 @@ def tuple_to_1d(uv_tuple, W, uv=True):
     return uv_tuple[0] * W + uv_tuple[1]
 
 
-def uv_to_1d_tensor(points, W, uv=True):
-    if uv:
-        return points[..., 0] + points[..., 1] * W
-    return points[..., 0] * W + points[..., 1]
-
-
 def get_match_loss(image_a_pred, image_b_pred, matches_a, matches_b, dist="cos", method="2d"):
     return PixelwiseContrastiveLoss.match_loss(
         image_a_pred, image_b_pred, matches_a, matches_b, dist=dist, method=method
@@ -101,24 +99,20 @@ def descriptor_loss_sparse(
     descriptors,
     descriptors_warped,
     homographies,
-    cell_size=8,
-    lamda_d=250,
-    num_matching_attempts=1000,
-    num_masked_non_matches_per_match=10,
-    dist="cos",
-    method="2d",
-    **config,
+    cell_size,
+    lamda_d,
+    num_matching_attempts,
+    num_masked_non_matches_per_match,
+    dist,
+    method,
 ):
     device = homographies.device
 
     Hc, Wc = descriptors.shape[1], descriptors.shape[2]
     H, W = Hc * cell_size, Wc * cell_size
 
-    def reshape(x):
-        return x.view(-1, Hc * Wc).transpose(0, 1).unsqueeze(0)
-
-    image_a = reshape(descriptors)
-    image_b = reshape(descriptors_warped)
+    image_a = reshape(descriptors, Hc, Wc)
+    image_b = reshape(descriptors_warped, Hc, Wc)
 
     uv_a_cells = get_coor_cells(Hc, Wc, uv=True).to(device)
     uv_a_pixels = uv_a_cells * cell_size + cell_size / 2
@@ -143,12 +137,8 @@ def descriptor_loss_sparse(
     uv_a_cells = uv_a_cells[choice]
     uv_b_cells = uv_b_cells[choice]
 
-    if method == "2d":
-        matches_a = normPts(uv_a_cells.float(), torch.tensor([Wc, Hc], device=device).float())
-        matches_b = normPts(uv_b_cells.float(), torch.tensor([Wc, Hc], device=device).float())
-    else:
-        matches_a = uv_to_1d_tensor(uv_a_cells, Wc)
-        matches_b = uv_to_1d_tensor(uv_b_cells, Wc)
+    matches_a = normPts(uv_a_cells.float(), torch.tensor([Wc, Hc], device=device).float())
+    matches_b = normPts(uv_b_cells.float(), torch.tensor([Wc, Hc], device=device).float())
 
     match_loss = get_match_loss(
         descriptors,
@@ -181,7 +171,7 @@ def descriptor_loss_sparse(
     return loss, lamda_d * match_loss, non_match_loss
 
 
-def batch_descriptor_loss_sparse(descriptors, descriptors_warped, homographies, **options):
+def batch_descriptor_loss_sparse(descriptors, descriptors_warped, homographies, cfg):
     loss, pos, neg = [], [], []
 
     for i in range(descriptors.shape[0]):
@@ -189,7 +179,12 @@ def batch_descriptor_loss_sparse(descriptors, descriptors_warped, homographies, 
             descriptors[i],
             descriptors_warped[i],
             homographies[i].float(),
-            **options,
+            cfg["cell_size"],
+            cfg["lamda_d"],
+            cfg["num_matching_attempts"],
+            cfg["num_masked_non_matches_per_match"],
+            cfg["dist"],
+            cfg["method"],
         )
         loss.append(lo)
         pos.append(p)

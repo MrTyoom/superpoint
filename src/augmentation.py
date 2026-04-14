@@ -102,7 +102,6 @@ def additive_shade(cfg: DictConfig, mask, img):
 class PhotometricAugmentation:
     def __init__(self, cfg: DictConfig) -> None:
         self.cfg = cfg
-
         self.aug = get_photometric_augmentation(cfg)
 
     def __call__(self, img):

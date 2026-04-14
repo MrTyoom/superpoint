@@ -1,8 +1,10 @@
 from typing import Callable
 
 import torch
+from torch.nn import BCELoss, Module
 from torch.nn.functional import softmax
 
+from src.loss_utils.sparse_loss import batch_descriptor_loss_sparse
 from src.train_utils.d2s import SpaceToDepth
 from src.types import Tensor
 
@@ -47,3 +49,22 @@ def get_masks(masks_two_dim: Tensor, cell_size: int) -> Tensor:
     masks_three_dim_flat = torch.prod(masks, 1)
 
     return masks_three_dim_flat
+
+
+class SuperPointLoss(Module):
+    def __init__(self, cfg: dict):
+        super().__init__()
+
+        self.detector_loss = BCELoss(reduction="none")
+        self.descriptor_loss = batch_descriptor_loss_sparse
+        self.lambda_loss = cfg["lambda_loss"]
+        self.cell_size = cfg["cell_size"]
+        self.sparse_loss_cfg = cfg["sparse_loss"]
+
+    def forward(self, semi, semi_w, desc, desc_w, labels_three_dim, labels_three_dim_w, masks, homo):  # noqa: WPS211
+        loss_det = detector_loss_calculation(semi, labels_three_dim, masks[0], self.detector_loss, self.cell_size)
+        loss_det_w = detector_loss_calculation(semi_w, labels_three_dim_w, masks[1], self.detector_loss, self.cell_size)
+
+        loss_desc, _, _, _ = self.descriptor_loss(desc, desc_w, homo, cfg=self.sparse_loss_cfg)
+
+        return loss_det + loss_det_w + self.lambda_loss * loss_desc

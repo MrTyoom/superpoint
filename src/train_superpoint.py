@@ -1,5 +1,6 @@
 import rootutils
 import torch
+from dvclive.lightning import DVCLiveLogger
 from lightning import Trainer, seed_everything
 from lightning.pytorch.callbacks import ModelCheckpoint, RichProgressBar
 from omegaconf import OmegaConf
@@ -32,14 +33,14 @@ def main(cfg):
         RichProgressBar(refresh_rate=REFRESH_RATE),
     ]
 
-    # logger = DVCLiveLogger(prefix="superpoint", log_model=False, dir=cfg.log_dir)
+    logger = DVCLiveLogger(prefix="superpoint", log_model=False, dir=cfg.log_dir)
 
     trainer = Trainer(
         max_epochs=cfg.num_epochs,
         limit_val_batches=cfg.limit_val_batches,
-        num_sanity_val_steps=0,
         default_root_dir=cfg.log_dir,
         callbacks=callbacks,
+        logger=logger,
         accelerator="gpu" if torch.cuda.is_available() else "cpu",
     )
 
