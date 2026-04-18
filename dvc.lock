@@ -96,6 +96,16 @@ stages:
                 nb_ellipses: 20
   prepare_satellite_images:
     cmd: python scripts/prepare_satellite_images.py
+    deps:
+    - path: data/satellite
+      hash: md5
+      md5: d99a92a35b51b4614c2c1c3ad9e1f067.dir
+      size: 497748125
+      nfiles: 40
+    - path: scripts/prepare_satellite_images.py
+      hash: md5
+      md5: 92801ce0b18f14c5035500eaf0d4d0a8
+      size: 4985
     params:
       params.yaml:
         prepare_satellite_images:
@@ -103,3 +113,38 @@ stages:
           satellite_dir: data/satellite
           crop_size: 480
           images_dir: data/satellite_images
+          train_size: 0.9
+    outs:
+    - path: data/satellite_images
+      hash: md5
+      md5: 77c21fd68fd4dce85dc7bb1e9d84181a.dir
+      size: 443487839
+      nfiles: 9000
+  download_satellite_data:
+    cmd: python scripts/download_satellite_data.py
+    params:
+      params.yaml:
+        download_satellite_data:
+          data_dir: data/satellite
+          max_workers: 12
+          tiles_need: 10
+          zoom: 17
+          num_tiles: 30
+          tile_size: 256
+          map_box:
+          - 37.56
+          - 55.715
+          - 38.0
+          - 56.35
+          sources:
+            google: http://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}
+            bing: http://a0.ortho.tiles.virtualearth.net/tiles/a{}.jpeg?g=2
+            arcgis: 
+              https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}
+            yandex: https://sat04.maps.yandex.net/tiles?l=sat&x={x}&y={y}&z={z}
+    outs:
+    - path: data/satellite
+      hash: md5
+      md5: d99a92a35b51b4614c2c1c3ad9e1f067.dir
+      size: 497748125
+      nfiles: 40

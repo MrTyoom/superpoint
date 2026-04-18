@@ -97,7 +97,7 @@ prepare_satellite_images:
   # размер спутниковых изображений
   crop_size: 480
   images_dir: data/satellite_images
-  train_size: 0.8
+  train_size: 0.9
 
 export_points:
   seed: 0xC0FFEE

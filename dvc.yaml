@@ -17,16 +17,27 @@ stages:
     cmd: python scripts/download_satellite_data.py
     params:
     - download_satellite_data
+    outs:
+    - ${download_satellite_data.data_dir}
 
   prepare_satellite_images:
     cmd: python scripts/prepare_satellite_images.py
     params:
     - prepare_satellite_images
+    deps:
+    - ${download_satellite_data.data_dir}
+    - scripts/prepare_satellite_images.py
+    outs:
+    - ${prepare_satellite_images.images_dir}
 
   export_points:
     cmd: python src/export_points.py
     params:
     - export_points
+    deps:
+    - src/export_points.py
+    # fixme: нужно добавить сохранение точек в другой директории, не в директории с изображениями
+    - ${prepare_satellite_images.images_dir}
 
 params:
 - dvclive/params.yaml
