@@ -1,6 +1,7 @@
 from typing import Callable
 
 import torch
+from omegaconf import DictConfig
 from torch.nn import BCELoss, Module
 from torch.nn.functional import softmax
 
@@ -52,7 +53,7 @@ def get_masks(masks_two_dim: Tensor, cell_size: int) -> Tensor:
 
 
 class SuperPointLoss(Module):
-    def __init__(self, cfg: dict):
+    def __init__(self, cfg: DictConfig):
         super().__init__()
 
         self.detector_loss = BCELoss(reduction="none")

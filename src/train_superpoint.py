@@ -9,7 +9,7 @@ from omegaconf import OmegaConf
 rootutils.setup_root(__file__, indicator="src", pythonpath=True)
 
 from src.logger import LOG
-from src.models.superpoint import SuperPointLightning
+from src.models.superpoint_lightning import SuperPointLightning
 from src.satellite_loader import SatelliteDataset
 from src.synthetic_loader import Loader
 

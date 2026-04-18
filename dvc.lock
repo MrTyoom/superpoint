@@ -32,8 +32,8 @@ stages:
     outs:
     - path: data/synthetic_dataset
       hash: md5
-      md5: e2f554dfcf1096394e7c98c747fe35be.dir
-      size: 1063730541
+      md5: 62e512f92e270a23c67ed88c6d583cfd.dir
+      size: 1063118825
       nfiles: 320000
   train_magicpoint:
     cmd: python src/train_magicpoint.py

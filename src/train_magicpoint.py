@@ -8,8 +8,7 @@ from omegaconf import DictConfig, OmegaConf
 
 rootutils.setup_root(__file__, indicator="src", pythonpath=True)
 
-from src.logger import LOG
-from src.models.superpoint import MagicPointLightning
+from src.models.magicpoint_lightning import MagicPointLightning
 from src.synthetic_loader import Loader, SyntheticDataset
 
 
@@ -19,13 +18,11 @@ torch.set_float32_matmul_precision("high")
 
 
 def main(cfg: DictConfig) -> None:
-    LOG.info("set seed: {0}".format(cfg.seed))
     seed_everything(cfg.seed)
 
     loader = Loader(cfg, SyntheticDataset)
 
-    cfg_dict = OmegaConf.to_container(cfg, resolve=True)
-    model = MagicPointLightning(cfg_dict)
+    model = MagicPointLightning(cfg)
 
     callbacks = [
         ModelCheckpoint(dirpath=cfg.log_dir, save_top_k=2, monitor="val/precision", mode="max", save_last=True),
