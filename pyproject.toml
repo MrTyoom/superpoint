@@ -22,6 +22,7 @@ dependencies = [
     "pytest>=9.0.2",
     "dvclive>=3.49.0",
     "httpx>=0.28.1",
+    "opencv-python-headless>=4.11.0.86",
 ]
 
 [tool.ruff]
