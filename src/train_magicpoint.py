@@ -8,29 +8,31 @@ from omegaconf import DictConfig, OmegaConf
 
 rootutils.setup_root(__file__, indicator="src", pythonpath=True)
 
+from src.loaders.magicpoint_loader import MagicPointLoader
 from src.models.magicpoint_lightning import MagicPointLightning
-from src.synthetic_loader import Loader, SyntheticDataset
-
-
-REFRESH_RATE = 50
-
-torch.set_float32_matmul_precision("high")
 
 
 def main(cfg: DictConfig) -> None:
+    # высокая точность умножения матриц для повышения производительности
+    torch.set_float32_matmul_precision("high")
+
+    # установка seed для воспроизводимости результатов
     seed_everything(cfg.seed)
 
-    loader = Loader(cfg, SyntheticDataset)
-
+    # загрузка данных и создание модели
+    loader = MagicPointLoader(cfg)
     model = MagicPointLightning(cfg)
 
+    # настройка коллбеков для сохранения модели и отображения прогресса
     callbacks = [
         ModelCheckpoint(dirpath=cfg.log_dir, save_top_k=2, monitor="val/precision", mode="max", save_last=True),
-        RichProgressBar(refresh_rate=REFRESH_RATE),
+        RichProgressBar(cfg.refresh_rate),
     ]
 
+    # настройка логгера для отслеживания метрик и сохранения результатов
     logger = DVCLiveLogger(prefix="magicpoint", log_model=False, dir=cfg.log_dir)
 
+    # настройка и запуск обучения модели
     trainer = Trainer(
         max_epochs=cfg.num_epochs,
         limit_val_batches=cfg.limit_val_batches,

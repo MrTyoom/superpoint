@@ -8,33 +8,31 @@ from omegaconf import OmegaConf
 
 rootutils.setup_root(__file__, indicator="src", pythonpath=True)
 
-from src.logger import LOG
+from src.loaders.superpoint_loader import SuperPointLoader
 from src.models.superpoint_lightning import SuperPointLightning
-from src.satellite_loader import SatelliteDataset
-from src.synthetic_loader import Loader
-
-
-REFRESH_RATE = 50
-
-torch.set_float32_matmul_precision("high")
 
 
 def main(cfg):
-    LOG.info("set seed: {0}".format(cfg.seed))
+    # установка seed для воспроизводимости результатов
     seed_everything(cfg.seed)
 
-    loader = Loader(cfg, SatelliteDataset)
-    cfg_dict = OmegaConf.to_container(cfg, resolve=True)
+    # высокая точность умножения матриц для повышения производительности
+    torch.set_float32_matmul_precision("high")
 
-    model = SuperPointLightning(cfg_dict)
+    # загрузка данных и создание модели
+    loader = SuperPointLoader(cfg)
+    model = SuperPointLightning(cfg)
 
+    # настройка коллбеков для сохранения модели и отображения прогресса
     callbacks = [
         ModelCheckpoint(dirpath=cfg.log_dir, save_top_k=2, monitor="val/precision", mode="max", save_last=True),
-        RichProgressBar(refresh_rate=REFRESH_RATE),
+        RichProgressBar(cfg.refresh_rate),
     ]
 
+    # настройка логгера для отслеживания метрик и сохранения результатов
     logger = DVCLiveLogger(prefix="superpoint", log_model=False, dir=cfg.log_dir)
 
+    # настройка и запуск обучения модели
     trainer = Trainer(
         max_epochs=cfg.num_epochs,
         limit_val_batches=cfg.limit_val_batches,

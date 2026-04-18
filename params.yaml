@@ -29,6 +29,8 @@ train_magicpoint:
   train_batch_size: 64 # 128
   val_batch_size: 64
   num_workers: 12 # 16
+  # число обновлений RichProgressBar в секунду
+  refresh_rate: 1
   augmentation:
     homographic:
       allow_artifacts: true
@@ -141,6 +143,8 @@ train_superpoint:
   train_batch_size: 16 # 128
   val_batch_size: 16
   num_workers: 2 # 16
+  # число обновлений RichProgressBar в секунду
+  refresh_rate: 1
   lambda_loss: 1
   sparse_loss:
     num_matching_attempts: 1000

@@ -17,7 +17,7 @@ root = rootutils.setup_root(__file__, indicator="src", pythonpath=True)
 EPS = 1e-8
 GRAY_CMAP = "gray"
 
-from src.synthetic_loader import SyntheticDataset
+from loaders.magicpoint_loader import SyntheticDataset
 
 
 @pytest.fixture(scope="module")

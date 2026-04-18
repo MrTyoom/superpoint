@@ -3,8 +3,9 @@ from pathlib import Path
 import cv2
 import numpy as np
 import torch
+from lightning import LightningDataModule
 from omegaconf import DictConfig
-from torch.utils.data import Dataset
+from torch.utils.data import DataLoader, Dataset
 
 from src.homography.apply import filter_points, homography_scaling_torch, warp_points
 from src.homography.homography_utils import compute_valid_mask
@@ -17,9 +18,9 @@ MAX_PIXEL = 255.0
 TRAIN_MODE = "train"
 
 
-class SatelliteDataset(Dataset):
+class SuperPointDataset(Dataset):
     def __init__(
-        self, data_dir: Path, aug_cfg: DictConfig, mode: str = TRAIN_MODE, device: torch.device = "cpu"
+        self, data_dir: Path, aug_cfg: DictConfig, mode: str = TRAIN_MODE, device: torch.device | str = "cpu"
     ) -> None:
         super().__init__()
         files = [fp for fp in Path(data_dir).glob("**/*.jpg") if fp.with_suffix(".npy").exists()]
@@ -35,7 +36,7 @@ class SatelliteDataset(Dataset):
         return len(self.image_files)
 
     def __getitem__(self, index: int) -> dict:
-        src_image = cv2.imread(self.image_files[index], cv2.IMREAD_GRAYSCALE)
+        src_image = cv2.imread(str(self.image_files[index]), cv2.IMREAD_GRAYSCALE)
         src_points = np.load(self.annot_files[index])
 
         H_full, W_full = src_image.shape
@@ -123,3 +124,37 @@ class SatelliteDataset(Dataset):
             "homo": homo_crop,
             "inv_homo": inv_homo_crop,
         }
+
+
+class SuperPointLoader(LightningDataModule):
+    def __init__(self, cfg: DictConfig) -> None:
+        super().__init__()
+        self.cfg = cfg
+
+    def setup(self, stage: str) -> None:
+        if stage == "fit":
+            data_dir = Path(self.cfg.data_dir)
+            aug_cfg = self.cfg.augmentation
+
+            self.train_dataset = SuperPointDataset(data_dir / "train", aug_cfg, "train")
+            self.val_dataset = SuperPointDataset(data_dir / "test", aug_cfg, "val")
+
+    def train_dataloader(self) -> DataLoader:
+        return DataLoader(
+            dataset=self.train_dataset,
+            batch_size=self.cfg.train_batch_size,
+            num_workers=self.cfg.num_workers,
+            drop_last=True,
+            shuffle=True,
+            pin_memory=torch.cuda.is_available(),
+        )
+
+    def val_dataloader(self) -> DataLoader:
+        return DataLoader(
+            dataset=self.val_dataset,
+            batch_size=self.cfg.val_batch_size,
+            num_workers=self.cfg.num_workers,
+            drop_last=False,
+            shuffle=False,
+            pin_memory=torch.cuda.is_available(),
+        )
