@@ -19,16 +19,18 @@ def main(cfg):
     # высокая точность умножения матриц для повышения производительности
     torch.set_float32_matmul_precision("high")
 
-    # загрузка данных и создание модели
-    model = SuperPointLightning(cfg)
-
+    # загрузка данных
     loader = SuperPointLoader(cfg)
     loader.setup(stage="fit")
 
+    # создание модели
+    model = SuperPointLightning(cfg)
+
     # настройка коллбеков для сохранения модели и отображения прогресса
     callbacks = [
-        ModelCheckpoint(dirpath=cfg.log_dir, save_top_k=2, monitor="val/precision", mode="max", save_last=True),
-        RichProgressBar(cfg.refresh_rate),
+        ModelCheckpoint(dirpath=cfg.log_dir, save_top_k=2, monitor="val/loss", mode="min", save_last=True),
+        # принудительное отображение progress bar в терминале
+        RichProgressBar(refresh_rate=cfg.refresh_rate, console_kwargs={"force_terminal": True}),
     ]
 
     # настройка логгера для отслеживания метрик и сохранения результатов

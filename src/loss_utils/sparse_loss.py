@@ -99,12 +99,12 @@ def descriptor_loss_sparse(
     descriptors,
     descriptors_warped,
     homographies,
-    cell_size,
-    lamda_d,
-    num_matching_attempts,
-    num_masked_non_matches_per_match,
-    dist,
-    method,
+    cell_size=8,
+    num_matching_attempts=1000,
+    num_masked_non_matches_per_match=100,
+    dist="cos",
+    method="2d",
+    lamda_d=1,
 ):
     device = homographies.device
 
@@ -126,8 +126,10 @@ def descriptor_loss_sparse(
         return_mask=True,
     )
 
-    uv_a_cells = uv_a_cells[mask]
+    if mask.sum() == 0:
+        return torch.tensor(0.0, device=device)
 
+    uv_a_cells = uv_a_cells[mask]
     uv_b_cells = (uv_b_pixels / cell_size).floor().long()
 
     choice = torch.tensor(
@@ -168,26 +170,22 @@ def descriptor_loss_sparse(
     )
 
     loss = lamda_d * match_loss + non_match_loss
-    return loss, lamda_d * match_loss, non_match_loss
+
+    return loss
 
 
-def batch_descriptor_loss_sparse(descriptors, descriptors_warped, homographies, cfg):
-    loss, pos, neg = [], [], []
+def batch_descriptor_loss_sparse(
+    src_descriptors,
+    wrp_descriptors,
+    homographies,
+):
+    losses = []
+    batch_size = src_descriptors.shape[0]
 
-    for i in range(descriptors.shape[0]):
-        lo, p, n = descriptor_loss_sparse(
-            descriptors[i],
-            descriptors_warped[i],
-            homographies[i].float(),
-            cfg["cell_size"],
-            cfg["lamda_d"],
-            cfg["num_matching_attempts"],
-            cfg["num_masked_non_matches_per_match"],
-            cfg["dist"],
-            cfg["method"],
-        )
-        loss.append(lo)
-        pos.append(p)
-        neg.append(n)
+    for i in range(batch_size):
+        loss = descriptor_loss_sparse(src_descriptors[i], wrp_descriptors[i], homographies[i])
+        losses.append(loss)
 
-    return torch.stack(loss).mean(), None, torch.stack(pos).mean(), torch.stack(neg).mean()
+    mean_loss = torch.stack(losses).mean()
+
+    return mean_loss

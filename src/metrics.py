@@ -46,8 +46,11 @@ def calculate_precision_recall(
 
 
 def metric_calculation(
-    semi: Tensor, labels: Tensor, masks: Tensor, detection_threshold: float, nms_dist: int
+    semi: Tensor, labels: Tensor, masks: Tensor | None, detection_threshold: float, nms_dist: int
 ) -> tuple[float, float]:
+
+    if masks is None:
+        masks = torch.ones_like(labels)
 
     heatmap = get_heatmap(semi)
     batch_size = heatmap.shape[0]

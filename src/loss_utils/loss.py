@@ -1,7 +1,6 @@
 from typing import Callable
 
 import torch
-from omegaconf import DictConfig
 from torch.nn import BCELoss, Module
 from torch.nn.functional import softmax
 
@@ -14,8 +13,11 @@ EPS = 1e-8
 
 
 def detector_loss_calculation(
-    semi: Tensor, labels: Tensor, masks: Tensor, criterion: Callable[..., Tensor], cell_size: int
+    semi: Tensor, labels: Tensor, masks: Tensor | None, criterion: Callable[..., Tensor], cell_size: int = 8
 ) -> Tensor:
+    if masks is None:
+        masks = torch.ones_like(labels)
+
     labels_three_dim = get_labels(labels, cell_size, add_dustbin=True)
     mask_three_dim_flat = get_masks(masks, cell_size)
 
@@ -53,19 +55,17 @@ def get_masks(masks_two_dim: Tensor, cell_size: int) -> Tensor:
 
 
 class SuperPointLoss(Module):
-    def __init__(self, cfg: DictConfig):
+    def __init__(self):
         super().__init__()
-
         self.detector_loss = BCELoss(reduction="none")
-        self.descriptor_loss = batch_descriptor_loss_sparse
-        self.lambda_loss = cfg["lambda_loss"]
-        self.cell_size = cfg["cell_size"]
-        self.sparse_loss_cfg = cfg["sparse_loss"]
 
-    def forward(self, semi, semi_w, desc, desc_w, labels_three_dim, labels_three_dim_w, masks, homo):  # noqa: WPS211
-        loss_det = detector_loss_calculation(semi, labels_three_dim, masks[0], self.detector_loss, self.cell_size)
-        loss_det_w = detector_loss_calculation(semi_w, labels_three_dim_w, masks[1], self.detector_loss, self.cell_size)
+    def forward(self, src_semi, dst_semi, src_desc, dst_desc, src_labels, dst_labels, homographs):
+        src_det_loss = detector_loss_calculation(src_semi, src_labels, None, self.detector_loss)
 
-        loss_desc, _, _, _ = self.descriptor_loss(desc, desc_w, homo, cfg=self.sparse_loss_cfg)
+        dst_det_loss = detector_loss_calculation(dst_semi, dst_labels, None, self.detector_loss)
 
-        return loss_det + loss_det_w + self.lambda_loss * loss_desc
+        detector_loss = src_det_loss + dst_det_loss
+
+        descriptor_loss = batch_descriptor_loss_sparse(src_desc, dst_desc, homographs)
+
+        return detector_loss, descriptor_loss

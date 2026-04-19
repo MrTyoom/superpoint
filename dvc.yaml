@@ -45,7 +45,15 @@ stages:
     outs:
     - ${export_points.points_dir}
 
+  train_superpoint:
+    cmd: python src/train_superpoint.py
+    params:
+    - train_superpoint
+    deps:
+    - src/train_superpoint.py
+    - ${export_points.points_dir}
+
 params:
 - dvclive/params.yaml
-- results/train_super_point/params.yaml
 - results/train_magic_point/params.yaml
+- results/train_super_point/params.yaml

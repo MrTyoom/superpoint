@@ -69,3 +69,18 @@ def homography_adaptation(heatmap, inv_homographies, mask_two_dim, device):
     sum_mask = torch.sum(warped_mask, dim=0)
 
     return sum_heatmap / torch.clamp(sum_mask, min=EPS)
+
+
+def crop_homography(homography, corner):
+    device = homography.device
+    top, left = corner
+
+    matrix = [[1, 0, left], [0, 1, top], [0, 0, 1]]
+    shift = torch.tensor(matrix, device=device).unsqueeze(0).float()
+
+    matrix = [[1, 0, -left], [0, 1, -top], [0, 0, 1]]
+    unshift = torch.tensor(matrix, device=device).unsqueeze(0).float()
+
+    homography = unshift @ homography @ shift
+
+    return homography

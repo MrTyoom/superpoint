@@ -32,11 +32,16 @@ stages:
     outs:
     - path: data/synthetic_dataset
       hash: md5
-      md5: 62e512f92e270a23c67ed88c6d583cfd.dir
-      size: 1063118825
+      md5: 988225884ed7d57b796cda86b0b34440.dir
+      size: 1063881381
       nfiles: 320000
   train_magicpoint:
     cmd: python src/train_magicpoint.py
+    deps:
+    - path: src/train_magicpoint.py
+      hash: md5
+      md5: f6ca9185e9fa928338851f1ef04bf74c
+      size: 1929
     params:
       params.yaml:
         train_magicpoint:
@@ -159,19 +164,24 @@ stages:
     deps:
     - path: data/satellite_images
       hash: md5
-      md5: 77c21fd68fd4dce85dc7bb1e9d84181a.dir
+      md5: a8ca5cb7f1e8eb7ac489b45224c3003a.dir
       size: 443487839
       nfiles: 9000
+    - path: models/magic_point.ckpt
+      hash: md5
+      md5: e885ecf892442ae43f2c86f1472617a4
+      size: 12843683
     - path: src/export_points.py
       hash: md5
-      md5: a7c305859a3837a84ef94e2ff090c356
-      size: 4000
+      md5: 022529808b93809453e0427e1e1a9699
+      size: 4388
     params:
       params.yaml:
         export_points:
           seed: 12648430
           magic_point_model: models/magic_point.ckpt
           images_dir: data/satellite_images
+          points_dir: data/satellite_points
           crop_size: 480
           blur_size: 3
           detection_threshold: 0.001
@@ -187,3 +197,52 @@ stages:
             min_contrast: 0.7
             max_contrast: 1.3
           debug_dir:
+    outs:
+    - path: data/satellite_points
+      hash: md5
+      md5: 24f9bf66a76c45956e686247706f9110.dir
+      size: 218407392
+      nfiles: 9000
+  train_superpoint:
+    cmd: python src/train_superpoint.py
+    deps:
+    - path: data/satellite_points
+      hash: md5
+      md5: 24f9bf66a76c45956e686247706f9110.dir
+      size: 218407392
+      nfiles: 9000
+    - path: src/train_superpoint.py
+      hash: md5
+      md5: ac4b01a1d809125aa79850ac08aae2a2
+      size: 2062
+    params:
+      params.yaml:
+        train_superpoint:
+          seed: 12648430
+          magic_point_model:
+          num_epochs: 300
+          learning_rate: 0.0001
+          detection_threshold: 0.015
+          nms_dist: 4
+          limit_val_batches:
+          log_dir: results/train_super_point
+          images_dir: data/satellite_images
+          points_dir: data/satellite_points
+          train_batch_size: 16
+          val_batch_size: 16
+          num_workers: 16
+          refresh_rate: 1
+          augmentation:
+            blur_size: 3
+            confidence_threshold: 0.002
+            crop_size:
+            - 320
+            - 320
+            min_angle: -5
+            max_angle: 5
+            min_shift: -0.1
+            max_shift: 0.1
+            min_brightness: 0.7
+            max_brightness: 1.3
+            min_contrast: 0.7
+            max_contrast: 1.3
