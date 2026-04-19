@@ -103,6 +103,7 @@ export_points:
   seed: 0xC0FFEE
   magic_point_model: models/magic_point.ckpt
   images_dir: data/satellite_images
+  points_dir: data/satellite_points
   # размер спутниковых изображений
   crop_size: 480
   # размер ядра сглаживания изображений
@@ -131,6 +132,9 @@ export_points:
 
 train_superpoint:
   seed: 0xC0FFEE
+  # путь к предобученной модели MagicPoint
+  # если null, модель будет обучаться с нуля
+  magic_point_model: models/magic_point.ckpt
   num_epochs: 300 # 500
   learning_rate: 0.0001
   cell_size: 8
@@ -138,7 +142,7 @@ train_superpoint:
   nms_dist: 4
   limit_val_batches: 100
   log_dir: results/train_super_point
-  data_dir: data/home3/avsorokin_3/superpoint/data/satellite_images
+  data_dir: data/satellite_images
   train_size: 0.8
   train_batch_size: 16 # 128
   val_batch_size: 16

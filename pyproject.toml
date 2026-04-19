@@ -59,7 +59,9 @@ select = "WPS"
 # Настройка специфичных для WPS параметров
 max-line-length = 120
 show-source = true
-ignore = ["WPS420"]
+# WPS111 - слишком короткие имена переменных
+# WPS420 - слишком длинные функции
+ignore = ["WPS420", "WPS111"]
 per-file-ignores = "tests/*: WPS218, WPS301, WPS210, WPS478, src/*: WPS478, WPS210"
 max-methods = 10
 max-line-complexity = 20

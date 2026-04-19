@@ -20,8 +20,10 @@ def main(cfg):
     torch.set_float32_matmul_precision("high")
 
     # загрузка данных и создание модели
-    loader = SuperPointLoader(cfg)
     model = SuperPointLightning(cfg)
+
+    loader = SuperPointLoader(cfg)
+    loader.setup(stage="fit")
 
     # настройка коллбеков для сохранения модели и отображения прогресса
     callbacks = [

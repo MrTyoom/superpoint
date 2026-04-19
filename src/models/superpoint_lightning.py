@@ -9,6 +9,14 @@ from src.models.superpoint import SuperPoint
 from src.types import Tensor
 
 
+def load_magic_point_weights(weights_path: str) -> SuperPoint:
+    checkpoint = torch.load(weights_path, map_location="cpu", weights_only=False)
+    weights = {k.removeprefix("_net."): v for k, v in checkpoint["state_dict"].items() if k.startswith("_net.")}
+    model = SuperPoint()
+    model.load_state_dict(weights, strict=True)
+    return model
+
+
 class SuperPointLightning(LightningModule):
     def __init__(self, cfg: DictConfig) -> None:
         super().__init__()
@@ -22,6 +30,10 @@ class SuperPointLightning(LightningModule):
 
         self.val_precision = MeanMetric()
         self.val_recall = MeanMetric()
+
+        # загрузка предобученных весов MagicPoint
+        if cfg.get("magic_point_model"):
+            self._net = load_magic_point_weights(cfg.magic_point_model)
 
         self.save_hyperparameters(OmegaConf.to_container(cfg, resolve=True))
 
