@@ -74,10 +74,10 @@ eval_magicpoint:
 
 eval_superpoint:
   data_dir: data/home3/avsorokin_3/superpoint/data/satellite_images/test
-  checkpoint: models/superpoint.ckpt
+  checkpoint: models/superpoint_final.ckpt
   batch_size: 1
   output_dir: tmp
-  detection_threshold: 0.002
+  detection_threshold: 0.015
   nms_dist: 4
   blur_size: 3
   augmentation:
@@ -89,8 +89,8 @@ eval_superpoint:
     crop_size: [ 320, 320 ]
     # минимальный и максимальный угол поворота в градусах
     # небольшой диапазон углов для проверки сходимости обучения, большой диапазон для финального обучения
-    min_angle: -5
-    max_angle: 5
+    min_angle: -180
+    max_angle: 180
     # максимальный и минимальный сдвиг точек в аффинном преобразовании в процентах
     min_shift: -0.1
     max_shift: 0.1
@@ -101,12 +101,41 @@ eval_superpoint:
     min_contrast: 0.7
     max_contrast: 1.3
 
+localization_tests:
+  seed: 0xc0ffee
+  data_dir: data/test_data
+  checkpoint: models/superpoint_v2.ckpt
+  blur_size: 3
+  batch_size: 1
+  detection_threshold: 0.015
+  nms_dist: 4
+  augmentation:
+    # размер ядра сглаживания изображений
+    blur_size: 3
+    # порог детектирования ключевых по confidence
+    confidence_threshold: 0.015
+    # размер изображений для обучения
+    crop_size: [ 320, 320 ]
+    # минимальный и максимальный угол поворота в градусах
+    # небольшой диапазон углов для проверки сходимости обучения, большой диапазон для финального обучения
+    min_angle: -12
+    max_angle: 12
+    # максимальный и минимальный сдвиг точек в аффинном преобразовании в процентах
+    min_shift: -0.03
+    max_shift: 0.03
+    # диапазон изменения яркости в цветовой аугментации
+    min_brightness: 0.7
+    max_brightness: 1.3
+    # диапазон изменения контрастности в цветовой аугментации
+    min_contrast: 0.7
+    max_contrast: 1.3
+
 download_satellite_data:
   data_dir: data/satellite
   max_workers: 12
-  tiles_need: 10 # 625
+  tiles_need: 50 # 625
   zoom: 17 # zoom 17 соответствует примерно 1 px / m
-  num_tiles: 30 # 10 # число тайлов по ширине и высоте изображения
+  num_tiles: 10 # 10 # число тайлов по ширине и высоте изображения
   tile_size: 256 # размер тайла в пикселях
   map_box:
     - 37.56000 # min_lon
@@ -166,16 +195,16 @@ train_superpoint:
   # путь к предобученной модели MagicPoint
   # если null, модель будет обучаться с нуля
   magic_point_model: null # models/magic_point.ckpt
-  num_epochs: 300 # 500
+  num_epochs: 500 # 500
   learning_rate: 0.0001
   detection_threshold: 0.015
   nms_dist: 4
-  limit_val_batches: null # 100
+  limit_val_batches: 100 # 100
   log_dir: results/train_super_point
   images_dir: data/home3/avsorokin_3/superpoint/data/satellite_images
   points_dir: data/home3/avsorokin_3/superpoint/data/satellite_images
-  train_batch_size: 16 # 128
-  val_batch_size: 16
+  train_batch_size: 64 # 128
+  val_batch_size: 64
   num_workers: 16 # 16
   # число обновлений RichProgressBar в секунду
   refresh_rate: 1
@@ -188,8 +217,8 @@ train_superpoint:
     crop_size: [ 320, 320 ]
     # минимальный и максимальный угол поворота в градусах
     # небольшой диапазон углов для проверки сходимости обучения, большой диапазон для финального обучения
-    min_angle: -5
-    max_angle: 5
+    min_angle: -180
+    max_angle: 180
     # максимальный и минимальный сдвиг точек в аффинном преобразовании в процентах
     min_shift: -0.1
     max_shift: 0.1

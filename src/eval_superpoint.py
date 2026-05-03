@@ -21,11 +21,14 @@ MAX_PIXEL_VALUE = 255.0
 THRESHOLD = 0.1
 
 
-def get_pts(semi, augmentation, cfg):
+def get_pts(semi, cfg, augmentation=None):
     # постобработка для получения тепловых карт ключевых точек
     heatmaps = get_heatmap(semi)
-    # обратное геометрическое преобразование тепловых карт
-    heatmaps = augmentation.warp(heatmaps)
+
+    if augmentation is not None:
+        # обратное геометрическое преобразование тепловых карт
+        heatmaps = augmentation.warp(heatmaps)
+
     # усреднение тепловых карт (homography adaptation)
     src_heatmap = torch.mean(heatmaps, dim=0).squeeze()  # H x W
     src_heatmap = src_heatmap.cpu().numpy()
@@ -144,8 +147,8 @@ def main(cfg):
         src_semi, src_desc = model(src_batch)
         dst_semi, dst_desc = model(dst_batch)
 
-        src_keypoints = get_pts(src_semi, augmentation, cfg)
-        dst_keypoints = get_pts(dst_semi, augmentation, cfg)
+        src_keypoints = get_pts(src_semi, cfg)
+        dst_keypoints = get_pts(dst_semi, cfg, augmentation=augmentation)
 
         dst_keypoints = filter_valid_points(dst_keypoints, valid_mask)
 
