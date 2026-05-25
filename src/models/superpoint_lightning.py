@@ -79,7 +79,6 @@ class SuperPointLightning(LightningModule):  # noqa: WPS230
         src_semi, src_desc = self(src_batch)
         dst_semi, dst_desc = self(dst_batch)
 
-        # TODO: проверить вычисление лоссов
         detector_loss, descriptor_loss = self._criterion(
             src_semi, dst_semi, src_desc, dst_desc, src_labels, dst_labels, homographs
         )
