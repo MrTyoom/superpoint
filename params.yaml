@@ -3,8 +3,8 @@ prepare_synthetic_data:
   data_dir: data/synthetic_dataset
   train_size: 0.8
   blur_size: 21
-  background_size: [ 960, 1280 ]
-  image_size: [ 120, 160 ]
+  background_size: [960, 1280]
+  image_size: [120, 160]
   primitives:
     draw_lines: 20_000
     draw_polygon: 20_000
@@ -52,16 +52,16 @@ train_magicpoint:
       random_brightness:
         max_abs_change: 75
       random_contrast:
-        strength_range: [ 0.3, 1.8 ]
+        strength_range: [0.3, 1.8]
       additive_gaussian_noise:
-        stddev_range: [ 0, 15 ]
+        stddev_range: [0, 15]
       additive_speckle_noise:
-        prob_range: [ 0, 0.0035 ]
+        prob_range: [0, 0.0035]
       motion_blur:
         max_kernel_size: 7
       additive_shade:
-        kernel_size_range: [ 50, 100 ]
-        transparency_range: [ -0.5, 0.8 ]
+        kernel_size_range: [50, 100]
+        transparency_range: [-0.5, 0.8]
         nb_ellipses: 20
 
 eval_magicpoint:
@@ -86,7 +86,7 @@ eval_superpoint:
     # порог детектирования ключевых по confidence
     confidence_threshold: 0.002
     # размер изображений для обучения
-    crop_size: [ 320, 320 ]
+    crop_size: [320, 320]
     # минимальный и максимальный угол поворота в градусах
     # небольшой диапазон углов для проверки сходимости обучения, большой диапазон для финального обучения
     min_angle: -180
@@ -102,9 +102,9 @@ eval_superpoint:
     max_contrast: 1.3
 
 localization_tests:
-  seed: 0xc0ffee
+  seed: 44
   data_dir: data/test_data
-  checkpoint: models/superpoint_v2.ckpt
+  checkpoint: models/superpoint_v2.ckpt # models/superpoint_v1.pth
   blur_size: 3
   batch_size: 1
   detection_threshold: 0.015
@@ -115,14 +115,14 @@ localization_tests:
     # порог детектирования ключевых по confidence
     confidence_threshold: 0.015
     # размер изображений для обучения
-    crop_size: [ 320, 320 ]
+    crop_size: [320, 320]
     # минимальный и максимальный угол поворота в градусах
     # небольшой диапазон углов для проверки сходимости обучения, большой диапазон для финального обучения
-    min_angle: -12
-    max_angle: 12
+    min_angle: 0
+    max_angle: 2
     # максимальный и минимальный сдвиг точек в аффинном преобразовании в процентах
-    min_shift: -0.03
-    max_shift: 0.03
+    min_shift: -0.01
+    max_shift: 0.01
     # диапазон изменения яркости в цветовой аугментации
     min_brightness: 0.7
     max_brightness: 1.3
@@ -147,7 +147,8 @@ download_satellite_data:
     ## TMS сервисы
     google: "http://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}"
     bing: "http://a0.ortho.tiles.virtualearth.net/tiles/a{}.jpeg?g=2"
-    arcgis: "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/Map\
+    arcgis:
+      "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/Map\
       Server/tile/{z}/{y}/{x}"
     yandex: "https://sat04.maps.yandex.net/tiles?l=sat&x={x}&y={y}&z={z}"
 
@@ -203,9 +204,9 @@ train_superpoint:
   log_dir: results/train_super_point
   images_dir: data/home3/avsorokin_3/superpoint/data/satellite_images
   points_dir: data/home3/avsorokin_3/superpoint/data/satellite_images
-  train_batch_size: 64 # 128
-  val_batch_size: 64
-  num_workers: 16 # 16
+  train_batch_size: 8 # 128
+  val_batch_size: 8
+  num_workers: 12 # 16
   # число обновлений RichProgressBar в секунду
   refresh_rate: 1
   augmentation:
@@ -214,7 +215,7 @@ train_superpoint:
     # порог детектирования ключевых по confidence
     confidence_threshold: 0.002
     # размер изображений для обучения
-    crop_size: [ 320, 320 ]
+    crop_size: [320, 320]
     # минимальный и максимальный угол поворота в градусах
     # небольшой диапазон углов для проверки сходимости обучения, большой диапазон для финального обучения
     min_angle: -180

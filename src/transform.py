@@ -112,11 +112,14 @@ def calc_homography_grid(src_pts: Tensor, dst_pts: Tensor, batch: Tensor) -> tup
 
     # вычисление матриц гомографий и обратных к ним
     homography = get_perspective_transform(src_pts, dst_pts)
+    homography_pixel = homography.clone()
+
     homography = normalize_homography(homography, (height, width), (height, width))
     inv_homography = torch.inverse(homography)
 
     homography = homography.to(device)
     inv_homography = inv_homography.to(device)
+    homography_pixel = homography_pixel.to(device)
 
     # создание интерполяционных сеток для геометрических преобразований изображений
     grid = torch.affine_grid_generator(homography[:, :2, :], [batch_size, channels, height, width], align_corners=True)
@@ -124,7 +127,7 @@ def calc_homography_grid(src_pts: Tensor, dst_pts: Tensor, batch: Tensor) -> tup
         inv_homography[:, :2, :], [batch_size, channels, height, width], align_corners=True
     )
 
-    return grid, inv_grid, homography, inv_homography
+    return grid, inv_grid, homography, inv_homography, homography_pixel
 
 
 def adjust_brightness(batch: Tensor, min_brightness: int, max_brightness: int, batch_size: int) -> Tensor:
@@ -165,6 +168,7 @@ class Augmentation:
         self.inv_grid = None
 
         self.homography = None
+        self.homography_pixel = None
         self.inv_homography = None
 
     def __call__(self, batch: Tensor) -> Tensor:
@@ -197,12 +201,13 @@ class Augmentation:
             src_pts, rotation_matrices, (width, height), self.cfg.min_shift, self.cfg.max_shift
         )
 
-        grid, inv_grid, homography, inv_homography = calc_homography_grid(src_pts, dst_pts, batch)
+        grid, inv_grid, homography, inv_homography, homography_pixel = calc_homography_grid(src_pts, dst_pts, batch)  # noqa: WPS236
 
         self.grid = grid
         self.inv_grid = inv_grid
 
         self.homography = homography
+        self.homography_pixel = homography_pixel
         self.inv_homography = inv_homography
 
     def augment_and_crop(self, batch: Tensor, labels: Tensor, geometry_aug: bool):
@@ -228,10 +233,14 @@ class Augmentation:
 
         # гомографию тоже центрируем и обрезаем,
         # чтобы она соответствовала размерам изображений после аугментации
-        homography = crop_homography(self.homography, corner)
+        homography = crop_homography(self.homography_pixel, corner)
 
         return batch, labels, homography
 
     def warp(self, tensor: Tensor) -> Tensor:
         tensor = torch.grid_sampler(tensor, self.grid, 0, 0, align_corners=True)
+        return tensor
+
+    def inv_warp(self, tensor: Tensor) -> Tensor:
+        tensor = torch.grid_sampler(tensor, self.inv_grid, 0, 0, align_corners=True)
         return tensor

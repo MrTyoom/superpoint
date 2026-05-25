@@ -51,7 +51,8 @@ exclude = [
     "scripts/*.py",
     "tests/*.py",
     "src/loss_utils/*.py",
-    "src/train_utils/correspondence_finder.py"
+    "src/train_utils/correspondence_finder.py",
+    "src/localization.py"
 ]
 max-imports = 20
 

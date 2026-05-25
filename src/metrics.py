@@ -1,9 +1,13 @@
+import cv2
 import numpy as np
 import torch
 
 from src.train_utils.d2s import DepthToSpace
 from src.train_utils.train_utils import get_pts_from_heatmap
 from src.types import Tensor
+
+
+OFFSET = 10**-6
 
 
 def get_heatmap(semi: Tensor) -> Tensor:
@@ -17,8 +21,6 @@ def get_heatmap(semi: Tensor) -> Tensor:
 
 
 def get_precision_recall(pred: Tensor, labels: Tensor) -> tuple[Tensor, Tensor]:
-    OFFSET = 10**-6
-
     precision = torch.sum(pred * labels) / (torch.sum(pred) + OFFSET)
     recall = torch.sum(pred * labels) / (torch.sum(labels) + OFFSET)
 
@@ -67,3 +69,77 @@ def metric_calculation(
         batch_recall[it] = recall
 
     return batch_precision.mean(), batch_recall.mean()
+
+
+def get_tile_corners(tiles):
+    base_x, base_y = tiles[0][1], tiles[0][2]
+    corners = []
+    for _, x, y, size in tiles:
+        lx, ly = x - base_x, y - base_y
+        corners.append(
+            [
+                [lx, ly],
+                [lx + size, ly],
+                [lx + size, ly + size],
+                [lx, ly + size],
+            ]
+        )
+    return np.array(corners, dtype=np.float32)  # (N, 4, 2)
+
+
+def warp_corners(corners, H):
+    n = corners.shape[0]
+    pts = corners.reshape(-1, 1, 2)  # (N*4, 1, 2)
+    warped = cv2.perspectiveTransform(pts, H)
+    return warped.reshape(n, 4, 2)  # (N, 4, 2)
+
+
+def compute_center_error(H_pred, H_gt, tiles):
+    corners = get_tile_corners(tiles)
+
+    pred_corners = warp_corners(corners, H_pred)  # (N, 4, 2)
+    gt_corners = warp_corners(corners, H_gt)
+
+    pred_center = pred_corners.reshape(-1, 2).mean(axis=0)  # (2,)
+    gt_center = gt_corners.reshape(-1, 2).mean(axis=0)
+
+    return float(np.linalg.norm(pred_center - gt_center))
+
+
+def compute_corner_error(H_pred, H_gt, tiles):
+    """Средняя ошибка по всем углам всех тайлов."""
+    corners = get_tile_corners(tiles)
+
+    pred_corners = warp_corners(corners, H_pred)  # (N, 4, 2)
+    gt_corners = warp_corners(corners, H_gt)
+
+    errors = np.linalg.norm(pred_corners - gt_corners, axis=2)  # (N, 4)
+    return float(errors.mean())
+
+
+def make_mask(H, tiles, image_shape):
+    h, w = image_shape[:2]
+    corners = get_tile_corners(tiles)
+
+    mask = np.zeros((h, w), dtype=np.uint8)
+    warped = warp_corners(corners, H)  # (N, 4, 2)
+    for tile_corners in warped:
+        cv2.fillPoly(mask, [tile_corners.astype(np.int32)], 1)
+    return mask
+
+
+def compute_iou_pr(H_pred, H_gt, tiles, image_shape):
+    pred_mask = make_mask(H_pred, tiles, image_shape)
+    gt_mask = make_mask(H_gt, tiles, image_shape)
+
+    intersection = np.logical_and(pred_mask, gt_mask).sum()
+    union = np.logical_or(pred_mask, gt_mask).sum()
+    pred_area = pred_mask.sum()
+    gt_area = gt_mask.sum()
+
+    iou = intersection / union if union > 0 else 0
+    precision = intersection / pred_area if pred_area > 0 else 0
+    recall = intersection / gt_area if gt_area > 0 else 0
+    f1 = 2 * precision * recall / (precision + recall) if (precision + recall) > 0 else 0
+
+    return float(iou), float(precision), float(recall), float(f1)
