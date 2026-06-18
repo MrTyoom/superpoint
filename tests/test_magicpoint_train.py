@@ -12,7 +12,7 @@ from torch.utils.data import DataLoader
 
 root = rootutils.setup_root(__file__, indicator="src", pythonpath=True)
 
-from src.synthetic_loader import Loader, SyntheticDataset
+from loaders.magicpoint_loader import Loader, SyntheticDataset
 from src.train_magicpoint import MagicPointLightning
 
 output_dir = root / "tmp" / "train_magic_point_samples"

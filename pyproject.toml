@@ -22,6 +22,8 @@ dependencies = [
     "pytest>=9.0.2",
     "dvclive>=3.49.0",
     "httpx>=0.28.1",
+    "opencv-python-headless>=4.11.0.86",
+    "usearch>=2.25.1",
 ]
 
 [tool.ruff]
@@ -47,7 +49,10 @@ lines-after-imports = 2
 [tool.flake8]
 exclude = [
     "scripts/*.py",
-    "tests/*.py"
+    "tests/*.py",
+    "src/loss_utils/*.py",
+    "src/train_utils/correspondence_finder.py",
+    "src/localization.py"
 ]
 max-imports = 20
 
@@ -56,7 +61,10 @@ select = "WPS"
 # Настройка специфичных для WPS параметров
 max-line-length = 120
 show-source = true
-ignore = ["WPS420"]
+# WPS111 - слишком короткие имена переменных
+# WPS420 - слишком длинные функции
+# WPS432 - магические числа, которые в нашем случае могут быть оправданы (например, максимальное значение пикселя 255)
+ignore = ["WPS420", "WPS111", "WPS432"]
 per-file-ignores = "tests/*: WPS218, WPS301, WPS210, WPS478, src/*: WPS478, WPS210"
 max-methods = 10
 max-line-complexity = 20

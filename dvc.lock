@@ -32,11 +32,16 @@ stages:
     outs:
     - path: data/synthetic_dataset
       hash: md5
-      md5: e2f554dfcf1096394e7c98c747fe35be.dir
-      size: 1063730541
+      md5: 988225884ed7d57b796cda86b0b34440.dir
+      size: 1063881381
       nfiles: 320000
   train_magicpoint:
     cmd: python src/train_magicpoint.py
+    deps:
+    - path: src/train_magicpoint.py
+      hash: md5
+      md5: f6ca9185e9fa928338851f1ef04bf74c
+      size: 1929
     params:
       params.yaml:
         train_magicpoint:
@@ -53,6 +58,7 @@ stages:
           train_batch_size: 64
           val_batch_size: 64
           num_workers: 12
+          refresh_rate: 1
           augmentation:
             homographic:
               allow_artifacts: true
@@ -96,6 +102,16 @@ stages:
                 nb_ellipses: 20
   prepare_satellite_images:
     cmd: python scripts/prepare_satellite_images.py
+    deps:
+    - path: data/satellite
+      hash: md5
+      md5: d99a92a35b51b4614c2c1c3ad9e1f067.dir
+      size: 497748125
+      nfiles: 40
+    - path: scripts/prepare_satellite_images.py
+      hash: md5
+      md5: 6fe411b7c013e61f7e2ccafd730625fd
+      size: 4973
     params:
       params.yaml:
         prepare_satellite_images:
@@ -103,3 +119,130 @@ stages:
           satellite_dir: data/satellite
           crop_size: 480
           images_dir: data/satellite_images
+          train_size: 0.9
+    outs:
+    - path: data/satellite_images
+      hash: md5
+      md5: a8ca5cb7f1e8eb7ac489b45224c3003a.dir
+      size: 443487839
+      nfiles: 9000
+  download_satellite_data:
+    cmd: python scripts/download_satellite_data.py
+    deps:
+    - path: scripts/download_satellite_data.py
+      hash: md5
+      md5: 2662b69f5daee0b2b77b462b4970cf54
+      size: 7736
+    params:
+      params.yaml:
+        download_satellite_data:
+          data_dir: data/satellite
+          max_workers: 12
+          tiles_need: 10
+          zoom: 17
+          num_tiles: 30
+          tile_size: 256
+          map_box:
+          - 37.56
+          - 55.715
+          - 38.0
+          - 56.35
+          sources:
+            google: http://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}
+            bing: http://a0.ortho.tiles.virtualearth.net/tiles/a{}.jpeg?g=2
+            arcgis: 
+              https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}
+            yandex: https://sat04.maps.yandex.net/tiles?l=sat&x={x}&y={y}&z={z}
+    outs:
+    - path: data/satellite
+      hash: md5
+      md5: d99a92a35b51b4614c2c1c3ad9e1f067.dir
+      size: 497748125
+      nfiles: 40
+  export_points:
+    cmd: python src/export_points.py
+    deps:
+    - path: data/satellite_images
+      hash: md5
+      md5: a8ca5cb7f1e8eb7ac489b45224c3003a.dir
+      size: 443487839
+      nfiles: 9000
+    - path: models/magic_point.ckpt
+      hash: md5
+      md5: e885ecf892442ae43f2c86f1472617a4
+      size: 12843683
+    - path: src/export_points.py
+      hash: md5
+      md5: 022529808b93809453e0427e1e1a9699
+      size: 4388
+    params:
+      params.yaml:
+        export_points:
+          seed: 12648430
+          magic_point_model: models/magic_point.ckpt
+          images_dir: data/satellite_images
+          points_dir: data/satellite_points
+          crop_size: 480
+          blur_size: 3
+          detection_threshold: 0.001
+          nms_dist: 4
+          batch_size: 50
+          augmentation:
+            min_angle: 0
+            max_angle: 360
+            min_shift: -0.1
+            max_shift: 0.1
+            min_brightness: 0.7
+            max_brightness: 1.3
+            min_contrast: 0.7
+            max_contrast: 1.3
+          debug_dir:
+    outs:
+    - path: data/satellite_points
+      hash: md5
+      md5: 24f9bf66a76c45956e686247706f9110.dir
+      size: 218407392
+      nfiles: 9000
+  train_superpoint:
+    cmd: python src/train_superpoint.py
+    deps:
+    - path: data/satellite_points
+      hash: md5
+      md5: 24f9bf66a76c45956e686247706f9110.dir
+      size: 218407392
+      nfiles: 9000
+    - path: src/train_superpoint.py
+      hash: md5
+      md5: ac4b01a1d809125aa79850ac08aae2a2
+      size: 2062
+    params:
+      params.yaml:
+        train_superpoint:
+          seed: 12648430
+          magic_point_model:
+          num_epochs: 300
+          learning_rate: 0.0001
+          detection_threshold: 0.015
+          nms_dist: 4
+          limit_val_batches:
+          log_dir: results/train_super_point
+          images_dir: data/satellite_images
+          points_dir: data/satellite_points
+          train_batch_size: 16
+          val_batch_size: 16
+          num_workers: 16
+          refresh_rate: 1
+          augmentation:
+            blur_size: 3
+            confidence_threshold: 0.002
+            crop_size:
+            - 320
+            - 320
+            min_angle: -5
+            max_angle: 5
+            min_shift: -0.1
+            max_shift: 0.1
+            min_brightness: 0.7
+            max_brightness: 1.3
+            min_contrast: 0.7
+            max_contrast: 1.3

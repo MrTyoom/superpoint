@@ -12,22 +12,48 @@ stages:
     cmd: python src/train_magicpoint.py
     params:
     - train_magicpoint
+    deps:
+    - src/train_magicpoint.py
 
   download_satellite_data:
     cmd: python scripts/download_satellite_data.py
     params:
     - download_satellite_data
+    deps:
+    - scripts/download_satellite_data.py
+    outs:
+    - ${download_satellite_data.data_dir}
 
   prepare_satellite_images:
     cmd: python scripts/prepare_satellite_images.py
     params:
     - prepare_satellite_images
+    deps:
+    - ${download_satellite_data.data_dir}
+    - scripts/prepare_satellite_images.py
+    outs:
+    - ${prepare_satellite_images.images_dir}
 
   export_points:
     cmd: python src/export_points.py
     params:
     - export_points
+    deps:
+    - src/export_points.py
+    - ${export_points.magic_point_model}
+    - ${prepare_satellite_images.images_dir}
+    outs:
+    - ${export_points.points_dir}
+
+  train_superpoint:
+    cmd: python src/train_superpoint.py
+    params:
+    - train_superpoint
+    deps:
+    - src/train_superpoint.py
+    - ${export_points.points_dir}
 
 params:
 - dvclive/params.yaml
 - results/train_magic_point/params.yaml
+- results/train_super_point/params.yaml

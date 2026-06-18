@@ -1,6 +1,7 @@
 import torch
 from omegaconf import DictConfig
 
+from src.homography.homography_utils import crop_homography
 from src.types import Tensor, TupleInt
 
 
@@ -105,17 +106,20 @@ def affine_transform_points(
     return dst_pts
 
 
-def calc_homography_grid(src_pts: Tensor, dst_pts: Tensor, batch: Tensor) -> tuple[Tensor, Tensor]:
+def calc_homography_grid(src_pts: Tensor, dst_pts: Tensor, batch: Tensor) -> tuple[Tensor, ...]:
     batch_size, channels, height, width = batch.shape
     device = batch.device
 
     # вычисление матриц гомографий и обратных к ним
     homography = get_perspective_transform(src_pts, dst_pts)
+    homography_pixel = homography.clone()
+
     homography = normalize_homography(homography, (height, width), (height, width))
     inv_homography = torch.inverse(homography)
 
     homography = homography.to(device)
     inv_homography = inv_homography.to(device)
+    homography_pixel = homography_pixel.to(device)
 
     # создание интерполяционных сеток для геометрических преобразований изображений
     grid = torch.affine_grid_generator(homography[:, :2, :], [batch_size, channels, height, width], align_corners=True)
@@ -123,7 +127,7 @@ def calc_homography_grid(src_pts: Tensor, dst_pts: Tensor, batch: Tensor) -> tup
         inv_homography[:, :2, :], [batch_size, channels, height, width], align_corners=True
     )
 
-    return grid, inv_grid
+    return grid, inv_grid, homography, inv_homography, homography_pixel
 
 
 def adjust_brightness(batch: Tensor, min_brightness: int, max_brightness: int, batch_size: int) -> Tensor:
@@ -144,11 +148,44 @@ def adjust_contrast(batch: Tensor, min_contrast: float, max_contrast: float, bat
     return batch
 
 
+def center_crop(batch: Tensor, crop_size: TupleInt) -> Tensor:
+    height, width = batch.shape[-2:]
+    crop_h, crop_w = crop_size
+
+    start_h = (height - crop_h) // 2
+    start_w = (width - crop_w) // 2
+
+    crop = batch[:, :, start_h : start_h + crop_h, start_w : start_w + crop_w]
+
+    return crop, (start_h, start_w)
+
+
 class Augmentation:
     def __init__(self, cfg: DictConfig) -> None:
         self.cfg = cfg
 
+        self.grid = None
+        self.inv_grid = None
+
+        self.homography = None
+        self.homography_pixel = None
+        self.inv_homography = None
+
     def __call__(self, batch: Tensor) -> Tensor:
+        # геометрическая аугментация
+        self.calculate_transform(batch)
+
+        batch = torch.grid_sampler(batch, self.inv_grid, 0, 0, align_corners=True)
+        batch_size = batch.shape[0]
+
+        # аугментация яркости
+        batch = adjust_brightness(batch, self.cfg.min_brightness, self.cfg.max_brightness, batch_size)
+        # аугментация контрастности
+        batch = adjust_contrast(batch, self.cfg.min_contrast, self.cfg.max_contrast, batch_size)
+
+        return batch
+
+    def calculate_transform(self, batch: Tensor):
         batch_size, channels, height, width = batch.shape
 
         # матрицы вращения
@@ -164,19 +201,46 @@ class Augmentation:
             src_pts, rotation_matrices, (width, height), self.cfg.min_shift, self.cfg.max_shift
         )
 
-        grid, inv_grid = calc_homography_grid(src_pts, dst_pts, batch)
+        grid, inv_grid, homography, inv_homography, homography_pixel = calc_homography_grid(src_pts, dst_pts, batch)  # noqa: WPS236
+
         self.grid = grid
+        self.inv_grid = inv_grid
 
-        # геометрическая аугментация с помощью обратных гомографий
-        batch = torch.grid_sampler(batch, inv_grid, 0, 0, align_corners=True)
+        self.homography = homography
+        self.homography_pixel = homography_pixel
+        self.inv_homography = inv_homography
 
-        # аугментация яркости
+    def augment_and_crop(self, batch: Tensor, labels: Tensor, geometry_aug: bool):
+        # цветовая аугментация
+        batch_size = batch.shape[0]
         batch = adjust_brightness(batch, self.cfg.min_brightness, self.cfg.max_brightness, batch_size)
-        # аугментация контрастности
         batch = adjust_contrast(batch, self.cfg.min_contrast, self.cfg.max_contrast, batch_size)
 
-        return batch
+        # геометрическая аугментация
+        if geometry_aug:
+            self.calculate_transform(batch)
+
+            # для изображений используем bilinear интерполяцию
+            batch = torch.grid_sampler(batch, self.inv_grid, 0, 0, align_corners=True)
+            # для меток используем nearest neighbor интерполяцию, чтобы сохранить бинарные значения
+            labels = torch.grid_sampler(labels.float(), self.inv_grid, 1, 0, align_corners=True)
+
+        # центрирование и обрезка изображений и меток
+        crop_size = self.cfg.crop_size
+
+        batch, corner = center_crop(batch, crop_size)
+        labels, _ = center_crop(labels, crop_size)
+
+        # гомографию тоже центрируем и обрезаем,
+        # чтобы она соответствовала размерам изображений после аугментации
+        homography = crop_homography(self.homography_pixel, corner)
+
+        return batch, labels, homography
 
     def warp(self, tensor: Tensor) -> Tensor:
         tensor = torch.grid_sampler(tensor, self.grid, 0, 0, align_corners=True)
+        return tensor
+
+    def inv_warp(self, tensor: Tensor) -> Tensor:
+        tensor = torch.grid_sampler(tensor, self.inv_grid, 0, 0, align_corners=True)
         return tensor

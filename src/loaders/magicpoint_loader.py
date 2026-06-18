@@ -17,20 +17,18 @@ MAX_PIXEL = 255.0
 TRAIN_MODE = "train"
 
 
-def get_labels(pnts: Tensor, height: int, width: int) -> Tensor:
+def get_labels(points: Tensor, height: int, width: int) -> Tensor:
     labels = torch.zeros(height, width)
-    pnts_round = pnts.round().long()
-
+    points_round = points.round().long()
     max_coord_tensor = torch.tensor([[width - 1, height - 1]]).long()
+    points_int = torch.min(points_round, max_coord_tensor)
+    indices = (points_int[:, 1], points_int[:, 0])
+    labels = labels.index_put_(indices, torch.ones(len(points_int)))
 
-    pnts_int = torch.min(pnts_round, max_coord_tensor)
-
-    indices = (pnts_int[:, 1], pnts_int[:, 0])
-    labels = labels.index_put_(indices, torch.ones(len(pnts_int)))
     return labels.unsqueeze(0)
 
 
-class SyntheticDataset(Dataset):
+class MagicPointDataset(Dataset):
     def __init__(self, data_dir: Path, aug_cfg: DictConfig, mode: str = TRAIN_MODE) -> None:
         super().__init__()
 
@@ -46,7 +44,7 @@ class SyntheticDataset(Dataset):
         return len(self.image_files)
 
     def __getitem__(self, index: int) -> tuple[Tensor, ...]:
-        src_image = cv2.imread(self.image_files[index], cv2.IMREAD_GRAYSCALE)
+        src_image = cv2.imread(str(self.image_files[index]), cv2.IMREAD_GRAYSCALE)
         src_points = np.load(self.annot_files[index])
 
         height, width = src_image.shape
@@ -86,40 +84,35 @@ class SyntheticDataset(Dataset):
         return warped_img, masks, labels
 
 
-class Loader(LightningDataModule):
-    def __init__(self, cfg: DictConfig, dataset_class: Dataset) -> None:
+class MagicPointLoader(LightningDataModule):
+    def __init__(self, cfg: DictConfig) -> None:
         super().__init__()
-        self.dataset_class = dataset_class
+        self.cfg = cfg
 
-        self.train_dataset: Dataset | None = None
-        self.val_dataset: Dataset | None = None
+    def setup(self, stage: str) -> None:
+        if stage == "fit":
+            data_dir = Path(self.cfg.data_dir)
+            aug_cfg = self.cfg.augmentation
 
-        self.save_hyperparameters(logger=False)
+            self.train_dataset = MagicPointDataset(data_dir / "train", aug_cfg, "train")
+            self.val_dataset = MagicPointDataset(data_dir / "test", aug_cfg, "val")
 
     def train_dataloader(self) -> DataLoader:
-        cfg = self.hparams.cfg
         return DataLoader(
             dataset=self.train_dataset,
-            batch_size=cfg.train_batch_size,
-            num_workers=cfg.num_workers,
+            batch_size=self.cfg.train_batch_size,
+            num_workers=self.cfg.num_workers,
             drop_last=True,
+            shuffle=True,
             pin_memory=torch.cuda.is_available(),
         )
 
     def val_dataloader(self) -> DataLoader:
-        cfg = self.hparams.cfg
         return DataLoader(
             dataset=self.val_dataset,
-            batch_size=cfg.val_batch_size,
-            num_workers=cfg.num_workers,
+            batch_size=self.cfg.val_batch_size,
+            num_workers=self.cfg.num_workers,
+            drop_last=False,
             shuffle=False,
             pin_memory=torch.cuda.is_available(),
         )
-
-    def setup(self, stage: str) -> None:
-        if stage == "fit":
-            data_dir = Path(self.hparams.cfg.data_dir)
-            aug_cfg = self.hparams.cfg.augmentation
-
-            self.train_dataset = self.dataset_class(data_dir / "train", aug_cfg, "train")
-            self.val_dataset = self.dataset_class(data_dir / "test", aug_cfg, "val")

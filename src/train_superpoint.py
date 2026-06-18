@@ -3,34 +3,38 @@ import torch
 from dvclive.lightning import DVCLiveLogger
 from lightning import Trainer, seed_everything
 from lightning.pytorch.callbacks import ModelCheckpoint, RichProgressBar
-from omegaconf import DictConfig, OmegaConf
+from omegaconf import OmegaConf
 
 
 rootutils.setup_root(__file__, indicator="src", pythonpath=True)
 
-from src.loaders.magicpoint_loader import MagicPointLoader
-from src.models.magicpoint_lightning import MagicPointLightning
+from src.loaders.superpoint_loader import SuperPointLoader
+from src.models.superpoint_lightning import SuperPointLightning
 
 
-def main(cfg: DictConfig) -> None:
-    # высокая точность умножения матриц для повышения производительности
-    torch.set_float32_matmul_precision("high")
-
+def main(cfg):
     # установка seed для воспроизводимости результатов
     seed_everything(cfg.seed)
 
-    # загрузка данных и создание модели
-    loader = MagicPointLoader(cfg)
-    model = MagicPointLightning(cfg)
+    # высокая точность умножения матриц для повышения производительности
+    torch.set_float32_matmul_precision("high")
+
+    # загрузка данных
+    loader = SuperPointLoader(cfg)
+    loader.setup(stage="fit")
+
+    # создание модели
+    model = SuperPointLightning(cfg)
 
     # настройка коллбеков для сохранения модели и отображения прогресса
     callbacks = [
-        ModelCheckpoint(dirpath=cfg.log_dir, save_top_k=2, monitor="val/precision", mode="max", save_last=True),
-        RichProgressBar(cfg.refresh_rate),
+        ModelCheckpoint(dirpath=cfg.log_dir, save_top_k=2, monitor="val/loss", mode="min", save_last=True),
+        # принудительное отображение progress bar в терминале
+        RichProgressBar(refresh_rate=cfg.refresh_rate, console_kwargs={"force_terminal": True}),
     ]
 
     # настройка логгера для отслеживания метрик и сохранения результатов
-    logger = DVCLiveLogger(prefix="magicpoint", log_model=False, dir=cfg.log_dir)
+    logger = DVCLiveLogger(prefix="superpoint", log_model=False, dir=cfg.log_dir)
 
     # настройка и запуск обучения модели
     trainer = Trainer(
@@ -47,6 +51,4 @@ def main(cfg: DictConfig) -> None:
 
 if __name__ == "__main__":
     cfg = OmegaConf.load("params.yaml")
-    cfg = cfg.train_magicpoint
-
-    main(cfg)
+    main(cfg.train_superpoint)

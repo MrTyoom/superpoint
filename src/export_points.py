@@ -59,7 +59,11 @@ def main(cfg):
     model = model.eval()
     model = model.to(device)
 
+    # создание директории для отладки, если указано в конфигурации
     debug_dir = None if cfg.debug_dir is None else make_dir(cfg.debug_dir, delete_if_exist=True)
+
+    # создание директории для сохранения ключевых точек
+    points_dir = make_dir(cfg.points_dir, delete_if_exist=True)
 
     # список исходных спутниковых изображений
     files = sorted(Path(cfg.images_dir).glob("**/*.jpg"))
@@ -93,8 +97,10 @@ def main(cfg):
         # вычисление ключевых точек
         key_points = get_pts_from_heatmap(heatmap, cfg.detection_threshold, cfg.nms_dist)
         key_points = key_points.transpose()
+
         # сохранение ключевых точек
-        output_file = image_file.with_suffix(".npy")
+        output_file = points_dir / image_file.relative_to(cfg.images_dir).with_suffix(".npy")
+        output_file.parent.mkdir(parents=True, exist_ok=True)
         np.save(output_file, key_points.astype(np.float32))
 
         if debug_dir is not None:

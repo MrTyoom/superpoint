@@ -1,5 +1,5 @@
 prepare_synthetic_data:
-  seed: 0xC0FFEE
+  seed: 0xc0ffee
   data_dir: data/synthetic_dataset
   train_size: 0.8
   blur_size: 21
@@ -16,7 +16,7 @@ prepare_synthetic_data:
     gaussian_noise: 20_000
 
 train_magicpoint:
-  seed: 0xC0FFEE
+  seed: 0xc0ffee
   num_epochs: 300 # 500
   learning_rate: 0.001
   cell_size: 8
@@ -29,8 +29,10 @@ train_magicpoint:
   train_batch_size: 64 # 128
   val_batch_size: 64
   num_workers: 12 # 16
+  # число обновлений RichProgressBar в секунду
+  refresh_rate: 1
   augmentation:
-    homographic: 
+    homographic:
       allow_artifacts: true
       max_angle: 1.57
       patch_ratio: 0.8
@@ -70,12 +72,70 @@ eval_magicpoint:
   detection_threshold: 0.015
   nms_dist: 4
 
+eval_superpoint:
+  data_dir: data/home3/avsorokin_3/superpoint/data/satellite_images/test
+  checkpoint: models/superpoint_final.ckpt
+  batch_size: 1
+  output_dir: tmp
+  detection_threshold: 0.015
+  nms_dist: 4
+  blur_size: 3
+  augmentation:
+    # размер ядра сглаживания изображений
+    blur_size: 3
+    # порог детектирования ключевых по confidence
+    confidence_threshold: 0.002
+    # размер изображений для обучения
+    crop_size: [320, 320]
+    # минимальный и максимальный угол поворота в градусах
+    # небольшой диапазон углов для проверки сходимости обучения, большой диапазон для финального обучения
+    min_angle: -180
+    max_angle: 180
+    # максимальный и минимальный сдвиг точек в аффинном преобразовании в процентах
+    min_shift: -0.1
+    max_shift: 0.1
+    # диапазон изменения яркости в цветовой аугментации
+    min_brightness: 0.7
+    max_brightness: 1.3
+    # диапазон изменения контрастности в цветовой аугментации
+    min_contrast: 0.7
+    max_contrast: 1.3
+
+localization_tests:
+  seed: 44
+  data_dir: data/test_data
+  checkpoint: models/superpoint_v2.ckpt # models/superpoint_v1.pth
+  blur_size: 3
+  batch_size: 1
+  detection_threshold: 0.015
+  nms_dist: 4
+  augmentation:
+    # размер ядра сглаживания изображений
+    blur_size: 3
+    # порог детектирования ключевых по confidence
+    confidence_threshold: 0.015
+    # размер изображений для обучения
+    crop_size: [320, 320]
+    # минимальный и максимальный угол поворота в градусах
+    # небольшой диапазон углов для проверки сходимости обучения, большой диапазон для финального обучения
+    min_angle: 0
+    max_angle: 2
+    # максимальный и минимальный сдвиг точек в аффинном преобразовании в процентах
+    min_shift: -0.01
+    max_shift: 0.01
+    # диапазон изменения яркости в цветовой аугментации
+    min_brightness: 0.7
+    max_brightness: 1.3
+    # диапазон изменения контрастности в цветовой аугментации
+    min_contrast: 0.7
+    max_contrast: 1.3
+
 download_satellite_data:
   data_dir: data/satellite
   max_workers: 12
-  tiles_need: 10 # 625
+  tiles_need: 50 # 625
   zoom: 17 # zoom 17 соответствует примерно 1 px / m
-  num_tiles: 30 # 10 # число тайлов по ширине и высоте изображения
+  num_tiles: 10 # 10 # число тайлов по ширине и высоте изображения
   tile_size: 256 # размер тайла в пикселях
   map_box:
     - 37.56000 # min_lon
@@ -83,23 +143,28 @@ download_satellite_data:
     - 38.00000 # max_lon
     - 56.35000 # max_lat
   #osm: data/map.osm.pbf
-  sources: ## TMS сервисы
+  sources:
+    ## TMS сервисы
     google: "http://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}"
     bing: "http://a0.ortho.tiles.virtualearth.net/tiles/a{}.jpeg?g=2"
-    arcgis: "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
+    arcgis:
+      "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/Map\
+      Server/tile/{z}/{y}/{x}"
     yandex: "https://sat04.maps.yandex.net/tiles?l=sat&x={x}&y={y}&z={z}"
 
 prepare_satellite_images:
-  seed: 0xC0FFEE
+  seed: 0xc0ffee
   satellite_dir: data/satellite
   # размер спутниковых изображений
   crop_size: 480
   images_dir: data/satellite_images
+  train_size: 0.9
 
 export_points:
-  seed: 0xC0FFEE
+  seed: 0xc0ffee
   magic_point_model: models/magic_point.ckpt
   images_dir: data/satellite_images
+  points_dir: data/satellite_points
   # размер спутниковых изображений
   crop_size: 480
   # размер ядра сглаживания изображений
@@ -124,7 +189,43 @@ export_points:
     min_contrast: 0.7
     max_contrast: 1.3
   # если debug_dir не null, в неё будут сохраняться отладочные изображения
-  debug_dir: ./tmp # null
+  debug_dir: null
 
-
-  
+train_superpoint:
+  seed: 0xc0ffee
+  # путь к предобученной модели MagicPoint
+  # если null, модель будет обучаться с нуля
+  magic_point_model: null # models/magic_point.ckpt
+  num_epochs: 500 # 500
+  learning_rate: 0.0001
+  detection_threshold: 0.015
+  nms_dist: 4
+  limit_val_batches: 100 # 100
+  log_dir: results/train_super_point
+  images_dir: data/home3/avsorokin_3/superpoint/data/satellite_images
+  points_dir: data/home3/avsorokin_3/superpoint/data/satellite_images
+  train_batch_size: 8 # 128
+  val_batch_size: 8
+  num_workers: 12 # 16
+  # число обновлений RichProgressBar в секунду
+  refresh_rate: 1
+  augmentation:
+    # размер ядра сглаживания изображений
+    blur_size: 3
+    # порог детектирования ключевых по confidence
+    confidence_threshold: 0.002
+    # размер изображений для обучения
+    crop_size: [320, 320]
+    # минимальный и максимальный угол поворота в градусах
+    # небольшой диапазон углов для проверки сходимости обучения, большой диапазон для финального обучения
+    min_angle: -180
+    max_angle: 180
+    # максимальный и минимальный сдвиг точек в аффинном преобразовании в процентах
+    min_shift: -0.1
+    max_shift: 0.1
+    # диапазон изменения яркости в цветовой аугментации
+    min_brightness: 0.7
+    max_brightness: 1.3
+    # диапазон изменения контрастности в цветовой аугментации
+    min_contrast: 0.7
+    max_contrast: 1.3

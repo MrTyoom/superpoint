@@ -1,8 +1,10 @@
 from typing import Callable
 
 import torch
+from torch.nn import BCELoss, Module
 from torch.nn.functional import softmax
 
+from src.loss_utils.sparse_loss import batch_descriptor_loss_sparse
 from src.train_utils.d2s import SpaceToDepth
 from src.types import Tensor
 
@@ -10,9 +12,12 @@ from src.types import Tensor
 EPS = 1e-8
 
 
-def loss_calculation(
-    semi: Tensor, labels: Tensor, masks: Tensor, criterion: Callable[..., Tensor], cell_size: int
+def detector_loss_calculation(
+    semi: Tensor, labels: Tensor, masks: Tensor | None, criterion: Callable[..., Tensor], cell_size: int = 8
 ) -> Tensor:
+    if masks is None:
+        masks = torch.ones_like(labels)
+
     labels_three_dim = get_labels(labels, cell_size, add_dustbin=True)
     mask_three_dim_flat = get_masks(masks, cell_size)
 
@@ -47,3 +52,20 @@ def get_masks(masks_two_dim: Tensor, cell_size: int) -> Tensor:
     masks_three_dim_flat = torch.prod(masks, 1)
 
     return masks_three_dim_flat
+
+
+class SuperPointLoss(Module):
+    def __init__(self):
+        super().__init__()
+        self.detector_loss = BCELoss(reduction="none")
+
+    def forward(self, src_semi, dst_semi, src_desc, dst_desc, src_labels, dst_labels, homographs):
+        src_det_loss = detector_loss_calculation(src_semi, src_labels, None, self.detector_loss)
+
+        dst_det_loss = detector_loss_calculation(dst_semi, dst_labels, None, self.detector_loss)
+
+        detector_loss = src_det_loss + dst_det_loss
+
+        descriptor_loss = batch_descriptor_loss_sparse(src_desc, dst_desc, homographs)
+
+        return detector_loss, descriptor_loss
